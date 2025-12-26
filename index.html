@@ -2,30 +2,33 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>MyZettelSync | 實體連結索引版</title>
+    <title>MyZettelSync | 純淨連結版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #fff; color: #000; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
-        .border-k { border: 2px solid #000; }
         
-        /* 實體連結標籤樣式 */
+        /* 實體連結標籤：浮在卡片邊框上 */
         .link-tag { 
-            position: absolute; top: -12px; 
+            position: absolute; top: -14px; 
             background: #000; color: #fff; 
-            padding: 2px 8px; font-size: 10px; font-family: 'JetBrains Mono';
-            cursor: pointer; z-index: 10; border: 1px solid #fff;
+            padding: 2px 10px; font-size: 10px; font-family: 'JetBrains Mono';
+            cursor: pointer; border: 1px solid #fff; font-weight: bold;
         }
-        .link-back { left: 10px; background: #000; } /* 誰連過來 */
-        .link-out { right: 10px; background: #555; } /* 連向誰 */
+        .link-back { left: 20px; } 
+        .link-out { right: 20px; background: #444; }
 
-        /* 索引盒樣式 */
-        .index-item { border-bottom: 1px solid #eee; transition: all 0.2s; }
+        /* 側邊索引盒 */
+        .index-item { border-bottom: 1px solid #f0f0f0; transition: 0.2s; cursor: pointer; }
         .index-item:hover { background: #000; color: #fff; }
-        .delete-btn { opacity: 0; transition: opacity 0.2s; }
-        .index-item:hover .delete-btn { opacity: 1; }
+        .delete-btn { color: #ccc; font-size: 14px; padding: 0 8px; }
+        .delete-btn:hover { color: #ff0000; }
+
+        /* 複閱提醒：時鐘圖示 */
+        .revisit-clock { animation: blink 1.5s infinite; color: #ff0000; margin-left: 5px; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.2; } }
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
@@ -34,46 +37,52 @@
 
     <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 shrink-0 bg-white z-50">
         <h1 class="text-lg font-900 tracking-tighter uppercase">MyZettelSync</h1>
-        <div id="revisitAlert" class="hidden animate-pulse bg-red-600 text-white text-[10px] px-2 py-1 font-black">REVISIT NEEDED</div>
+        <div class="flex items-center gap-4">
+            <button onclick="setRevisitTimer()" class="text-[10px] font-black border-2 border-black px-2">TIMER</button>
+            <div id="syncStatus" class="w-3 h-3 border-2 border-black rounded-full"></div>
+        </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside class="w-64 border-r-4 border-black flex flex-col shrink-0 bg-zinc-50">
             <div class="p-4 border-b-2 border-black bg-white">
-                <p class="text-[10px] font-black uppercase mb-2">Index Box</p>
-                <input type="text" id="searchInput" oninput="renderSidebar()" placeholder="FILTER..." class="w-full text-xs font-bold outline-none border-b border-black">
+                <input type="text" id="searchInput" oninput="renderSidebar()" placeholder="FILTER INDEX..." class="w-full text-xs font-black outline-none">
             </div>
             
             <div class="flex-1 overflow-y-auto no-scrollbar">
                 <div class="p-4 border-b border-zinc-200">
-                    <p class="text-[9px] font-black text-zinc-400 uppercase mb-3 tracking-widest">Keywords</p>
-                    <div id="keywordList" class="space-y-1"></div>
+                    <p class="text-[9px] font-black text-zinc-400 uppercase mb-2">Keywords</p>
+                    <div id="keywordList" class="flex flex-wrap gap-1"></div>
                 </div>
                 <div class="p-4">
-                    <p class="text-[9px] font-black text-zinc-400 uppercase mb-3 tracking-widest">Card IDs</p>
-                    <div id="idList" class="space-y-1"></div>
+                    <p class="text-[9px] font-black text-zinc-400 uppercase mb-2">Card History</p>
+                    <div id="idList" class="space-y-0.5"></div>
                 </div>
             </div>
         </aside>
 
         <main class="flex-1 flex flex-col p-12 bg-white overflow-y-auto no-scrollbar">
             <div class="max-w-2xl w-full mx-auto">
-                <div id="cardSurface" class="relative border-4 border-black p-10 shadow-[15px_15px_0px_0px_rgba(0,0,0,1)] bg-white min-h-[450px]">
+                <div id="cardSurface" class="relative border-4 border-black p-10 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)] bg-white min-h-[450px]">
+                    
                     <div id="connectorContainer"></div>
 
-                    <div class="flex justify-between border-b-2 border-black mb-8 pb-2">
-                        <span id="activeId" class="mono font-black text-zinc-300">#NEW_ENTRY</span>
-                        <span id="modeStatus" class="text-[10px] font-black uppercase">Standard</span>
+                    <div class="flex justify-between items-center border-b-2 border-black mb-8 pb-4">
+                        <div class="flex items-center gap-3">
+                            <span id="activeId" class="mono font-black text-zinc-300 text-lg">#NEW</span>
+                            <span id="modeLabel" class="bg-black text-white text-[10px] px-2 py-0.5 font-black hidden"></span>
+                        </div>
+                        <div class="text-[10px] font-black text-zinc-400 uppercase">⌘⇧1:Quote | ⌘⇧2:Idea</div>
                     </div>
 
-                    <textarea id="cardInput" class="w-full h-80 text-2xl outline-none leading-relaxed placeholder-zinc-100" placeholder="START WRITING..."></textarea>
+                    <textarea id="cardInput" class="w-full h-80 text-2xl outline-none leading-relaxed placeholder-zinc-100" placeholder="寫入思考... 用 [[ID]] 連結"></textarea>
                     
-                    <div class="mt-10 flex justify-between items-center border-t-2 border-black pt-6">
+                    <div class="mt-10 flex justify-between items-end border-t-2 border-black pt-6">
                         <div class="flex gap-4">
-                            <button onclick="saveCard()" class="bg-black text-white px-8 py-2 font-900 text-xs uppercase hover:bg-zinc-800">Save</button>
-                            <button onclick="toggleBoard(true)" class="border-2 border-black px-4 py-2 font-900 text-xs uppercase">Board</button>
+                            <button onclick="saveCard()" class="bg-black text-white px-10 py-3 font-900 text-sm uppercase">File Card</button>
+                            <button onclick="toggleBoard(true)" class="border-2 border-black px-6 py-3 font-900 text-sm uppercase">Board</button>
                         </div>
-                        <span id="charCount" class="mono text-[10px] font-bold text-zinc-400">0 CHARS</span>
+                        <div id="charCount" class="mono text-[10px] font-bold">0 CHARS</div>
                     </div>
                 </div>
             </div>
@@ -81,16 +90,18 @@
     </div>
 
     <div id="boardOverlay" class="hidden fixed inset-0 bg-white z-[100] p-12 overflow-y-auto">
-        <div class="flex justify-between items-center mb-16 border-b-4 border-black pb-4">
-            <h2 class="text-4xl font-900 uppercase">Archive Board</h2>
-            <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-4 py-1">CLOSE</button>
+        <div class="flex justify-between items-center mb-10 border-b-4 border-black pb-4">
+            <h2 class="text-3xl font-900">ARCHIVE BOARD</h2>
+            <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-4">CLOSE</button>
         </div>
-        <div id="boardGrid" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
+        <div id="boardGrid" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
     </div>
 
 <script>
-    let cards = JSON.parse(localStorage.getItem('zet_v4')) || [];
+    let cards = JSON.parse(localStorage.getItem('zet_v5')) || [];
+    let currentMode = null; // '摘錄', 'Idea', 或 null
     let activeFid = null;
+    let revisitHours = localStorage.getItem('revisit_hours') || 24;
 
     window.onload = () => {
         renderSidebar();
@@ -103,35 +114,45 @@
     function initShortcuts() {
         document.addEventListener('keydown', e => {
             const cmdShift = e.metaKey && e.shiftKey;
-            if (cmdShift && e.key === '1') { e.preventDefault(); insertType('-摘錄'); }
-            if (cmdShift && e.key === '2') { e.preventDefault(); insertType('-Idea'); }
+            if (cmdShift && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
+            if (cmdShift && e.key === '2') { e.preventDefault(); setMode('Idea'); }
             if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
             if (cmdShift && e.key === 'b') { e.preventDefault(); toggleBoard(); }
             if (e.key === 'Escape') toggleBoard(false);
         });
     }
 
-    function insertType(t) {
-        const el = document.getElementById('cardInput');
-        el.value = t + " " + el.value;
-        document.getElementById('modeStatus').innerText = t.substring(1);
+    function setMode(mode) {
+        currentMode = (currentMode === mode) ? null : mode;
+        const label = document.getElementById('modeLabel');
+        if (currentMode) {
+            label.innerText = currentMode.toUpperCase();
+            label.classList.remove('hidden');
+        } else {
+            label.classList.add('hidden');
+        }
     }
 
     function saveCard() {
         const content = document.getElementById('cardInput').value.trim();
         if (!content) return;
 
-        const timestamp = Math.floor(Date.now() / 1000);
-        const shortId = (timestamp % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
         const tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
 
         const card = {
-            id: shortId, fullId: Date.now(), content, tags, time: Date.now(), status: 'new'
+            id, fullId: Date.now(), content, tags, 
+            mode: currentMode, // 存儲模式而不是插入文字
+            time: Date.now(), status: 'new'
         };
 
         cards.unshift(card);
-        localStorage.setItem('zet_v4', JSON.stringify(cards));
+        localStorage.setItem('zet_v5', JSON.stringify(cards));
+        
+        // 重置
         document.getElementById('cardInput').value = "";
+        currentMode = null;
+        document.getElementById('modeLabel').classList.add('hidden');
         renderSidebar();
     }
 
@@ -139,25 +160,32 @@
         const term = document.getElementById('searchInput').value.toLowerCase();
         const kwList = document.getElementById('keywordList');
         const idList = document.getElementById('idList');
+        const now = Date.now();
 
-        // 關鍵詞統計與渲染
+        // 渲染 Keywords
         const stats = {};
         cards.forEach(c => c.tags.forEach(t => stats[t] = (stats[t] || 0) + 1));
-        
-        kwList.innerHTML = Object.entries(stats).map(([t, count]) => `
-            <div class="index-item flex justify-between items-center p-2 text-[10px] font-black">
-                <span class="cursor-pointer" onclick="filterBy('#${t}')">#${t} (${count})</span>
-                <button onclick="deleteTag('${t}')" class="delete-btn text-zinc-400 hover:text-white">×</button>
+        kwList.innerHTML = Object.keys(stats).map(t => `
+            <div class="flex items-center bg-black text-white text-[9px] font-black px-2 py-1 mb-1">
+                <span onclick="filterBy('#${t}')">#${t}</span>
+                <button onclick="deleteTag('${t}')" class="ml-2 opacity-50">×</button>
             </div>
         `).join('');
 
-        // ID 渲染
-        idList.innerHTML = cards.map(c => `
-            <div class="index-item flex justify-between items-center p-2 text-[10px] font-mono">
-                <span class="cursor-pointer font-bold" onclick="loadCard('${c.fullId}')">#${c.id}</span>
-                <button onclick="deleteCard('${c.fullId}')" class="delete-btn text-zinc-400 hover:text-white">×</button>
-            </div>
-        `).join('');
+        // 渲染 IDs
+        idList.innerHTML = cards.filter(c => c.content.toLowerCase().includes(term)).map(c => {
+            const isOld = (now - c.time) > (revisitHours * 3600000) && c.status === 'new';
+            const modeMark = c.mode === '摘錄' ? '●' : (c.mode === 'Idea' ? '○' : '');
+            return `
+                <div class="index-item flex justify-between items-center p-2 text-[10px]">
+                    <span onclick="loadCard('${c.fullId}')" class="mono font-bold">#${c.id} ${modeMark}</span>
+                    <div class="flex items-center">
+                        ${isOld ? '<span class="revisit-clock">⏳</span>' : ''}
+                        <button onclick="deleteCard('${c.fullId}')" class="delete-btn">×</button>
+                    </div>
+                </div>
+            `;
+        }).join('');
     }
 
     function loadCard(fid) {
@@ -165,39 +193,48 @@
         activeFid = fid;
         document.getElementById('cardInput').value = card.content;
         document.getElementById('activeId').innerText = `#${card.id}`;
+        
+        // 顯示模式標籤
+        const label = document.getElementById('modeLabel');
+        if (card.mode) {
+            label.innerText = card.mode.toUpperCase();
+            label.classList.remove('hidden');
+        } else {
+            label.classList.add('hidden');
+        }
+
         renderConnectors(card);
     }
 
-    // 實體連結渲染核心
     function renderConnectors(current) {
         const container = document.getElementById('connectorContainer');
         container.innerHTML = '';
 
-        // 入站連結 (誰引用了我)
-        const backlinks = cards.filter(c => c.content.includes(`[[${current.id}]]`));
-        backlinks.forEach((c, idx) => {
-            const el = document.createElement('div');
-            el.className = 'link-tag link-back';
-            el.style.top = `${-12 - (idx * 20)}px`;
-            el.innerText = `← FROM #${c.id}`;
-            el.onclick = () => loadCard(c.fullId);
+        // Backlinks (誰引用了我)
+        const back = cards.filter(c => c.content.includes(`[[${current.id}]]`));
+        back.forEach((c, i) => {
+            const el = createTag(`← ${c.id}`, 'link-back', i, () => loadCard(c.fullId));
             container.appendChild(el);
         });
 
-        // 出站連結 (我引用了誰)
-        const outgoingIds = (current.content.match(/\[\[([A-Z0-9]{4})\]\]/g) || []).map(m => m.slice(2, -2));
-        outgoingIds.forEach((id, idx) => {
-            const el = document.createElement('div');
-            el.className = 'link-tag link-out';
-            el.style.top = `${-12 - (idx * 20)}px`;
-            el.innerText = `TO #${id} →`;
-            el.onclick = () => {
-                const target = cards.find(c => c.id === id);
+        // Outgoing (我引用了誰)
+        const out = (current.content.match(/\[\[([A-Z0-9]{4})\]\]/g) || []).map(m => m.slice(2, -2));
+        out.forEach((id, i) => {
+            const el = createTag(`${id} →`, 'link-out', i, () => {
+                const target = cards.find(x => x.id === id);
                 if(target) loadCard(target.fullId);
-                else alert('目標卡片不存在');
-            };
+            });
             container.appendChild(el);
         });
+    }
+
+    function createTag(txt, cls, idx, fn) {
+        const el = document.createElement('div');
+        el.className = `link-tag ${cls}`;
+        el.style.top = `${-14 - (idx * 22)}px`;
+        el.innerText = txt;
+        el.onclick = fn;
+        return el;
     }
 
     function toggleBoard(show) {
@@ -211,48 +248,48 @@
 
     function renderBoard() {
         document.getElementById('boardGrid').innerHTML = cards.map(c => `
-            <div class="border-4 border-black p-8 bg-white shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-                <div class="flex justify-between items-start mb-6">
-                    <span class="mono font-black bg-black text-white px-2">#${c.id}</span>
-                    <button onclick="deleteCard('${c.fullId}')" class="text-xl font-black">×</button>
+            <div class="border-4 border-black p-6 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
+                <div class="flex justify-between mb-4 border-b border-black pb-2">
+                    <span class="mono font-black">#${c.id} ${c.mode||''}</span>
+                    <button onclick="deleteCard('${c.fullId}')">×</button>
                 </div>
-                <div class="prose prose-sm font-bold mb-8">${marked.parse(c.content)}</div>
-                <div class="flex gap-4 border-t-2 border-black pt-4">
-                    <button onclick="develop('${c.id}')" class="text-[10px] font-black uppercase underline">發展連結</button>
+                <div class="text-sm font-bold h-32 overflow-hidden italic mb-4">${marked.parse(c.content.substring(0,100))}...</div>
+                <div class="flex gap-2">
+                    <button onclick="developLink('${c.id}')" class="bg-black text-white text-[9px] px-2 py-1 font-black">發展連結</button>
+                    <button onclick="updateStatus('${c.fullId}', 'archived')" class="border border-black text-[9px] px-2 py-1 font-black">歸檔</button>
                 </div>
             </div>
         `).join('');
     }
 
-    function develop(id) {
+    function developLink(id) {
         toggleBoard(false);
         document.getElementById('cardInput').value = `[[${id}]] ` + document.getElementById('cardInput').value;
         document.getElementById('cardInput').focus();
     }
 
     function deleteCard(fid) {
-        if(confirm('確定刪除卡片？')) {
+        if(confirm('Delete Card?')) {
             cards = cards.filter(c => c.fullId != fid);
-            localStorage.setItem('zet_v4', JSON.stringify(cards));
+            localStorage.setItem('zet_v5', JSON.stringify(cards));
             renderSidebar();
             if(!document.getElementById('boardOverlay').classList.contains('hidden')) renderBoard();
         }
     }
 
-    function deleteTag(tag) {
-        if(confirm(`刪除關鍵詞 #${tag}？（不會刪除卡片內容）`)) {
-            cards.forEach(c => {
-                c.content = c.content.replace(new RegExp(`#${tag}`, 'g'), '');
-                c.tags = c.tags.filter(t => t !== tag);
-            });
-            localStorage.setItem('zet_v4', JSON.stringify(cards));
+    function setRevisitTimer() {
+        const h = prompt("設定複閱提醒時間（小時）：", revisitHours);
+        if(h) {
+            revisitHours = h;
+            localStorage.setItem('revisit_hours', h);
             renderSidebar();
         }
     }
 
-    function filterBy(term) {
-        document.getElementById('searchInput').value = term;
-        renderSidebar();
+    function updateStatus(fid, s) {
+        cards.find(c => c.fullId == fid).status = s;
+        localStorage.setItem('zet_v5', JSON.stringify(cards));
+        renderBoard();
     }
 </script>
 </body>
