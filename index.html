@@ -2,35 +2,28 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>ZettelStudio | Network & Review</title>
+    <title>ZettelStudio | Cloud Network</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.11.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #f0f0f0; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* 模式與佈局 */
-        .studio-active #studioSide { width: 480px; opacity: 1; border-left: 4px solid black; }
-        .studio-active #midEditor { display: none !important; }
-        .studio-active #midBoard { display: flex !important; }
+        .studio-active #studioSide { width: 500px; opacity: 1; border-left: 4px solid black; }
+        .studio-active #midEditor, .studio-active #midBoard { display: none !important; }
+        .studio-active #midBoard { display: flex !important; } /* Studio 模式下強行顯示看板 */
+        
+        #midBoard, #studioSide { display: none; }
         .board-view #midEditor { display: none; }
         .board-view #midBoard { display: flex; }
-        #midBoard, #studioSide { display: none; }
-        #studioSide { width: 0; opacity: 0; overflow: hidden; transition: all 0.2s ease; }
-
-        /* 看板網格 */
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; align-content: start; }
-        .board-card { height: 320px; border: 3px solid #000; padding: 1.2rem; background: #fff; box-shadow: 4px 4px 0 #000; position: relative; transition: 0.1s; }
-        .card-content-preview { flex: 1; overflow-y: auto; font-size: 0.85rem; line-height: 1.6; }
-
-        /* 提醒標籤 */
-        .review-badge { position: absolute; top: -10px; left: 10px; background: #ff4757; color: white; padding: 2px 8px; font-size: 9px; font-weight: 900; box-shadow: 2px 2px 0 #000; }
-        .link-tool { cursor: crosshair; }
         
-        .z-link { background: #000; color: #fff; padding: 0 4px; font-family: 'JetBrains Mono'; font-size: 10px; border-radius: 2px; cursor: pointer; }
-        .active-mode-btn { background: black !important; color: white !important; }
+        .idx-item:hover { background: #000; color: #fff; }
+        .board-card { height: 320px; border: 3px solid #000; background: #fff; box-shadow: 4px 4px 0 #000; }
+        .sync-pulse { animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
     </style>
 </head>
 <body id="mainBody" class="flex flex-col h-screen">
@@ -38,258 +31,229 @@
     <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100]">
         <div class="flex items-center gap-6">
             <h1 class="text-lg font-900 uppercase tracking-tighter italic">ZettelStudio</h1>
-            <nav class="flex border-2 border-black divide-x-2 divide-black">
-                <button onclick="setUIMode('input')" id="btn-input" class="px-4 py-1 text-[10px] font-black uppercase">Input</button>
-                <button onclick="setUIMode('studio')" id="btn-studio" class="px-4 py-1 text-[10px] font-black uppercase">Studio</button>
+            <nav class="flex border-2 border-black divide-x-2 divide-black text-[10px] font-black uppercase">
+                <button onclick="setUIMode('input')" id="btn-input" class="px-4 py-1">Input</button>
+                <button onclick="setUIMode('studio')" id="btn-studio" class="px-4 py-1">Studio</button>
             </nav>
-            <button onclick="toggleMidView()" class="text-[9px] font-black border-l-2 border-black px-4 hover:bg-yellow-400">BOARD (C+B)</button>
+            <div class="flex gap-2 border-l-2 border-zinc-200 pl-6">
+                <button onclick="authDropbox()" id="authBtn" class="text-[9px] font-black border-2 border-black px-3 py-1 bg-blue-500 text-white">LINK DROPBOX</button>
+                <button onclick="syncAll()" id="syncBtn" class="hidden text-[9px] font-black border-2 border-black px-3 py-1 hover:bg-black hover:text-white transition">SYNC CLOUD</button>
+            </div>
         </div>
-        <div id="quickNotice" class="text-[10px] font-black text-blue-600 animate-pulse"></div>
+        <div id="syncStatus" class="text-[9px] font-black opacity-40 uppercase tracking-widest italic">Local Only</div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         
-        <aside class="w-60 border-r-4 border-black bg-white flex flex-col shrink-0">
-            <div class="p-4 bg-zinc-100 text-[10px] font-black uppercase border-b-2 border-black">Vault Review</div>
+        <aside class="w-64 border-r-4 border-black bg-white flex flex-col shrink-0">
+            <div class="p-4 bg-zinc-100 text-[10px] font-black border-b-2 border-black">VAULT EXPLORER</div>
             <div class="flex-1 overflow-y-auto no-scrollbar">
-                <div class="idx-item border-b border-black/10 p-4 cursor-pointer font-bold text-xs hover:bg-red-500 hover:text-white transition flex justify-between" onclick="filterBoard('review')"><span>需要複習 (Spaced)</span><span id="c-r">0</span></div>
-                <div class="idx-item border-b border-black/10 p-4 cursor-pointer font-bold text-xs hover:bg-orange-500 hover:text-white transition flex justify-between" onclick="filterBoard('undeveloped')"><span>待發展 (Drafts)</span><span id="c-u">0</span></div>
-                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 uppercase mt-4 border-y-2 border-black">Boxes</div>
-                <div class="idx-item p-4 cursor-pointer font-bold text-xs hover:bg-black hover:text-white" onclick="filterBoard('摘錄')">摘錄盒</div>
-                <div class="idx-item p-4 cursor-pointer font-bold text-xs hover:bg-black hover:text-white border-b-2 border-black" onclick="filterBoard('Idea')">Idea 盒</div>
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-b">TIMELINE</div>
+                <div id="timeBox"></div>
+
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-y">CATEGORIES</div>
+                <div class="idx-item p-4 text-xs font-bold flex justify-between" onclick="filterBoard('摘錄')"><span>摘錄盒</span><span id="c-q">0</span></div>
+                <div class="idx-item p-4 text-xs font-bold flex justify-between" onclick="filterBoard('Idea')"><span>Idea 盒</span><span id="c-i">0</span></div>
+                
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-y">KEYWORDS</div>
                 <div id="tagBox"></div>
             </div>
         </aside>
 
-        <main id="midContent" class="flex-1 flex flex-col relative overflow-hidden bg-zinc-100">
-            
+        <main id="midContent" class="flex-1 flex flex-col overflow-hidden bg-zinc-100">
             <section id="midEditor" class="flex-1 flex flex-col items-center pt-24 px-10">
-                <div class="max-w-xl w-full bg-white border-4 border-black p-8 shadow-[12px_12px_0_0_#000]">
-                    <textarea id="mainIn" class="w-full h-64 text-xl outline-none leading-relaxed bg-transparent resize-none" placeholder="輸入想法... [[ID]]"></textarea>
-                    <div class="mt-6 flex justify-between items-center">
-                        <span class="text-[9px] font-black opacity-30">TYPE CTRL+S TO SAVE SILENTLY</span>
-                        <button onclick="saveCard()" class="bg-black text-white px-10 py-3 font-900 text-xs uppercase hover:bg-zinc-800">Save Card</button>
+                <div class="max-w-xl w-full bg-white p-8 border-4 border-black shadow-[12px_12px_0_0_#000]">
+                    <div class="flex justify-between mb-4">
+                        <div class="flex border-2 border-black overflow-hidden text-[10px] font-black">
+                            <button onclick="setType('Idea')" id="t-i" class="px-3 py-1 bg-black text-white">IDEA</button>
+                            <button onclick="setType('摘錄')" id="t-q" class="px-3 py-1">QUOTE</button>
+                        </div>
                     </div>
+                    <textarea id="mainIn" class="w-full h-64 text-xl outline-none leading-relaxed resize-none" placeholder="#Tag [[ID]] ..."></textarea>
+                    <button onclick="saveCard()" class="mt-4 w-full bg-black text-white py-3 font-900 text-xs uppercase hover:bg-zinc-800 transition">Save & Sync</button>
                 </div>
             </section>
 
             <section id="midBoard" class="flex-1 flex flex-col p-8 overflow-hidden">
                 <div class="flex justify-between items-center mb-6">
-                    <h2 id="boardTitle" class="text-xs font-900 uppercase border-l-4 border-black pl-3">Archives</h2>
-                    <div class="flex gap-2">
-                        <span id="linkBuffer" class="hidden text-[10px] font-black bg-yellow-400 px-3 py-2 border-2 border-black">LINKING FROM...</span>
-                        <button onclick="pushSelected()" class="bg-blue-600 text-white text-[10px] font-black px-6 py-2 uppercase shadow-[4px_4px_0_#000]">Push to Project</button>
-                    </div>
+                    <h2 id="boardTitle" class="text-xs font-900 uppercase border-l-4 border-black pl-2">Board</h2>
+                    <button onclick="pushToStudio()" class="bg-blue-600 text-white text-[10px] font-black px-6 py-2 shadow-[4px_4px_0_#000]">PUSH TO STUDIO</button>
                 </div>
                 <div id="boardGrid" class="flex-1 overflow-y-auto card-grid no-scrollbar pb-10"></div>
             </section>
         </main>
 
         <aside id="studioSide" class="bg-white flex flex-col overflow-hidden">
-            <div class="p-6 border-b-4 border-black bg-zinc-50 space-y-4">
-                <input id="projName" class="font-900 text-xl uppercase outline-none bg-transparent border-b-2 border-zinc-200 focus:border-black w-full" value="Untitled Project">
-                <button onclick="exportDoc()" class="w-full text-[10px] font-black bg-black text-white py-2">EXPORT .MD</button>
+            <div class="p-6 border-b-4 border-black">
+                <input id="projName" class="font-900 text-xl uppercase outline-none w-full" value="Untitled Project">
+                <button onclick="exportProject()" class="mt-4 w-full text-[10px] font-black bg-black text-white py-2">EXPORT .MD</button>
             </div>
-            <div id="studioCanvas" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-6"></div>
+            <div id="studioCanvas" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-4"></div>
         </aside>
     </div>
 
-    <div id="editModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-[300] flex items-center justify-center p-6">
-        <div class="bg-white border-4 border-black p-8 max-w-2xl w-full shadow-[20px_20px_0_0_#000]">
-            <div class="flex justify-between mb-4 border-b-2 border-black pb-2">
-                <span id="editId" class="font-black mono text-xl">#ID</span>
-                <div class="flex gap-4 items-center">
-                    <button id="delBtn" class="text-[9px] font-black text-red-500 hover:underline uppercase">Delete Card</button>
-                    <button onclick="closeModal()" class="font-black text-[9px] border-2 border-black px-2 uppercase">Close</button>
-                </div>
-            </div>
-            <textarea id="editArea" class="w-full h-80 text-lg outline-none leading-relaxed resize-none bg-zinc-50 p-2"></textarea>
-            <div id="backlinks" class="mt-4 flex flex-wrap gap-2 text-[10px] font-black"></div>
-            <button onclick="updateCard()" class="mt-4 w-full bg-black text-white py-4 font-900 text-xs uppercase">Save Changes</button>
-        </div>
-    </div>
-
 <script>
-    let cards = JSON.parse(localStorage.getItem('Z_Cards_V7')) || [];
-    let project = JSON.parse(localStorage.getItem('Z_Proj_V7')) || { segments: [] };
-    let currentInputMode = 'Idea';
-    let linkSourceId = null;
-    let editingId = null;
+    const CLIENT_ID = '2zshj5fwkxe18e6';
+    let dbx = null;
+    let cards = JSON.parse(localStorage.getItem('Z_Cards_V11')) || [];
+    let project = JSON.parse(localStorage.getItem('Z_Proj_V11')) || { segments: [] };
+    let currentType = 'Idea';
 
-    // 間隔重複週期 (秒)
-    const INTERVALS = { week: 604800, month: 2592000, month3: 7776000, year: 31536000 };
-
-    window.addEventListener('keydown', e => {
-        const ctrl = e.ctrlKey || e.metaKey;
-        if (ctrl && e.key === '1') { e.preventDefault(); currentInputMode='摘錄'; setUIMode('input'); }
-        if (ctrl && e.key === '2') { e.preventDefault(); currentInputMode='Idea'; setUIMode('input'); }
-        if (ctrl && e.key === '3') { e.preventDefault(); setUIMode('studio'); }
-        if (ctrl && e.key === 'b') { e.preventDefault(); toggleMidView(); }
-        if (ctrl && e.key === 's') { e.preventDefault(); saveCard(); }
-    });
-
-    window.onload = () => { updateStats(); setUIMode('input'); checkReviewCount(); };
-
-    function setUIMode(mode) {
-        document.getElementById('mainBody').classList.toggle('studio-active', mode === 'studio');
-        if(mode === 'studio') { document.getElementById('studioSide').style.display = 'flex'; renderBoard(); renderProject(); }
-        else { setMidView('editor'); }
+    // 1. Dropbox OAuth 流程
+    function authDropbox() {
+        const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
+        const authUrl = dbxAuth.getAuthenticationUrl(window.location.href);
+        window.location.href = authUrl;
     }
 
-    function toggleMidView() {
-        if(document.body.classList.contains('studio-active')) return;
-        const content = document.getElementById('midContent');
-        content.classList.toggle('board-view');
-        if(content.classList.contains('board-view')) renderBoard();
+    function checkAuth() {
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const token = params.get('access_token');
+        if (token) {
+            localStorage.setItem('dbx_token', token);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        
+        const storedToken = localStorage.getItem('dbx_token');
+        if (storedToken) {
+            dbx = new Dropbox.Dropbox({ accessToken: storedToken });
+            document.getElementById('authBtn').classList.add('hidden');
+            document.getElementById('syncBtn').classList.remove('hidden');
+            document.getElementById('syncStatus').innerText = "Cloud Ready";
+            return true;
+        }
+        return false;
     }
 
-    function setMidView(view) {
-        document.getElementById('midContent').classList.toggle('board-view', view === 'board');
-        if(view === 'board') renderBoard();
+    // 2. 核心同步邏輯 (跨設備)
+    async function syncAll() {
+        if (!dbx) return;
+        const btn = document.getElementById('syncBtn');
+        btn.classList.add('sync-pulse');
+        btn.innerText = "SYNCING...";
+
+        try {
+            // 從雲端下載最新數據
+            const response = await dbx.filesDownload({ path: '/vault.json' }).catch(() => null);
+            if (response) {
+                const cloudCards = JSON.parse(await response.result.fileBlob.text());
+                if (confirm(`發現雲端數據 (${cloudCards.length} 卡片)。是否與本地合併？`)) {
+                    // 簡單合併邏輯：以 ID 為準去重
+                    const combined = [...cards, ...cloudCards];
+                    cards = Array.from(new Map(combined.map(item => [item.id, item])).values())
+                                 .sort((a,b) => b.time - a.time);
+                    localStorage.setItem('Z_Cards_V11', JSON.stringify(cards));
+                }
+            }
+
+            // 上傳本地最新數據
+            await dbx.filesUpload({ path: '/vault.json', contents: JSON.stringify(cards), mode: 'overwrite' });
+            await dbx.filesUpload({ path: '/studio.json', contents: JSON.stringify(project), mode: 'overwrite' });
+            
+            btn.innerText = "SYNC DONE";
+            document.getElementById('syncStatus').innerText = `Synced: ${new Date().toLocaleTimeString()}`;
+        } catch (e) {
+            console.error(e);
+            alert("Sync Failed. Token might be expired.");
+        } finally {
+            btn.classList.remove('sync-pulse');
+            setTimeout(() => btn.innerText = "SYNC CLOUD", 2000);
+            updateStats();
+        }
     }
+
+    // 3. 基礎功能
+    window.onload = () => { checkAuth(); updateStats(); setUIMode('input'); };
 
     function saveCard() {
         const content = document.getElementById('mainIn').value.trim();
         if(!content) return;
         const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        cards.unshift({ id, content, mode: currentInputMode, time: Date.now(), tags: (content.match(/#[^\s]+/g) || []).map(t => t.substring(1)) });
-        localStorage.setItem('Z_Cards_V7', JSON.stringify(cards));
+        const tags = (content.match(/#([^\s#]+)/g) || []).map(t => t.substring(1));
+        cards.unshift({ id, content, mode: currentType, time: Date.now(), tags });
+        localStorage.setItem('Z_Cards_V11', JSON.stringify(cards));
         document.getElementById('mainIn').value = "";
-        updateStats(); document.getElementById('mainIn').focus();
+        updateStats();
+        if(dbx) syncAll(); // 自動觸發同步
     }
 
     function updateStats() {
-        const now = Date.now() / 1000;
-        const reviewList = cards.filter(c => {
-            const age = now - (c.time / 1000);
-            return Object.values(INTERVALS).some(int => Math.abs(age - int) < 86400); // 1天誤差內提醒
-        });
-        const undevel = cards.filter(c => c.content.length < 30 && c.tags.length === 0);
-        
-        document.getElementById('c-r').innerText = reviewList.length;
-        document.getElementById('c-u').innerText = undevel.length;
+        // 更新分類統計
         document.getElementById('c-q').innerText = cards.filter(c => c.mode === '摘錄').length;
         document.getElementById('c-i').innerText = cards.filter(c => c.mode === 'Idea').length;
+
+        // 更新時間軸
+        const timeGroups = {};
+        cards.forEach(c => {
+            const d = new Date(c.time);
+            const key = `${d.getFullYear()}.${d.getMonth()+1}`;
+            timeGroups[key] = (timeGroups[key] || 0) + 1;
+        });
+        document.getElementById('timeBox').innerHTML = Object.entries(timeGroups).map(([k,v]) => `
+            <div class="idx-item p-4 text-[11px] font-bold flex justify-between" onclick="filterBoard('time:${k}')"><span>${k}</span><span class="opacity-30">${v}</span></div>
+        `).join('');
+
+        // 更新關鍵詞
+        const tagsMap = {};
+        cards.forEach(c => c.tags.forEach(t => tagsMap[t] = (tagsMap[t] || 0) + 1));
+        document.getElementById('tagBox').innerHTML = Object.entries(tagsMap).map(([k,v]) => `
+            <div class="idx-item p-4 text-[11px] font-bold flex justify-between" onclick="filterBoard('${k}')"><span>#${k}</span><span class="opacity-30">${v}</span></div>
+        `).join('');
     }
 
     function filterBoard(type) {
-        setMidView('board');
-        if(type === 'review') {
-            const now = Date.now() / 1000;
-            renderBoard(null, cards.filter(c => Object.values(INTERVALS).some(int => Math.abs((now - c.time/1000) - int) < 86400)));
-        } else if(type === 'undeveloped') {
-            renderBoard(null, cards.filter(c => c.content.length < 30 && c.tags.length === 0));
-        } else {
-            renderBoard(type);
-        }
-    }
-
-    function renderBoard(filter, customList) {
+        setUIMode('input'); // 切換視圖
+        document.getElementById('midContent').classList.add('board-view');
         const grid = document.getElementById('boardGrid');
-        let list = customList || (filter ? cards.filter(c => c.tags.includes(filter) || c.mode === filter) : cards);
-        const now = Date.now() / 1000;
-
-        grid.innerHTML = list.map(c => {
-            const age = now - (c.time / 1000);
-            let badge = "";
-            if (Math.abs(age - INTERVALS.week) < 86400) badge = "1 WEEK REVIEW";
-            if (Math.abs(age - INTERVALS.month) < 86400) badge = "1 MONTH REVIEW";
-            
-            return `
-            <div class="board-card flex flex-col">
-                ${badge ? `<div class="review-badge">${badge}</div>` : ''}
-                <div class="flex justify-between items-start mb-3 border-b-2 border-black pb-1">
-                    <span class="mono font-black text-xs">#${c.id}</span>
-                    <div class="flex gap-2">
-                        <button onclick="startLink('${c.id}')" class="text-[8px] font-black border border-black px-1 hover:bg-yellow-400">LINK</button>
-                        <button onclick="openEdit('${c.id}')" class="text-[8px] font-black border border-black px-1 hover:bg-black hover:text-white">EDIT</button>
-                    </div>
-                </div>
-                <div class="card-content-preview flex-1">${marked.parse(c.content).replace(/\[\[([A-Z0-9]{4})\]\]/g, '<span class="z-link" onclick="event.stopPropagation(); openEdit(\'$1\')">[[$1]]</span>')}</div>
-                <div class="mt-2 pt-2 border-t border-zinc-100 flex justify-between">
-                    <input type="checkbox" class="card-checkbox" value="${c.id}">
-                    <span class="text-[8px] opacity-30 font-black">${new Date(c.time).toLocaleDateString()}</span>
-                </div>
-            </div>`;
-        }).join('');
-    }
-
-    function startLink(id) {
-        if(!linkSourceId) {
-            linkSourceId = id;
-            document.getElementById('linkBuffer').innerText = `LINKING FROM #${id}... (Click another Link)`;
-            document.getElementById('linkBuffer').classList.remove('hidden');
+        let list = cards;
+        if(type.startsWith('time:')) {
+            const t = type.split(':')[1];
+            list = cards.filter(c => { const d = new Date(c.time); return `${d.getFullYear()}.${d.getMonth()+1}` === t; });
+        } else if(type === '摘錄' || type === 'Idea') {
+            list = cards.filter(c => c.mode === type);
         } else {
-            if(linkSourceId === id) { linkSourceId = null; document.getElementById('linkBuffer').classList.add('hidden'); return; }
-            const target = cards.find(x => x.id === id);
-            target.content += `\n\nRelated: [[${linkSourceId}]]`;
-            localStorage.setItem('Z_Cards_V7', JSON.stringify(cards));
-            linkSourceId = null;
-            document.getElementById('linkBuffer').classList.add('hidden');
-            renderBoard();
+            list = cards.filter(c => c.tags.includes(type));
         }
+        grid.innerHTML = list.map(c => `<div class="board-card p-4 flex flex-col"><div class="flex justify-between text-[10px] font-black border-b border-black pb-1"><span>#${c.id}</span><input type="checkbox" class="card-check" value="${c.id}"></div><div class="flex-1 text-sm mt-3 overflow-y-auto">${marked.parse(c.content)}</div></div>`).join('');
     }
 
-    function openEdit(id) {
-        editingId = id;
-        const c = cards.find(x => x.id === id);
-        document.getElementById('editId').innerText = `#${id}`;
-        document.getElementById('editArea').value = c.content;
-        document.getElementById('delBtn').onclick = () => deleteCard(id);
-        document.getElementById('editModal').classList.remove('hidden');
+    function setType(t) { 
+        currentType = t;
+        document.getElementById('t-i').className = t === 'Idea' ? 'px-3 py-1 bg-black text-white' : 'px-3 py-1';
+        document.getElementById('t-q').className = t === '摘錄' ? 'px-3 py-1 bg-black text-white' : 'px-3 py-1';
     }
 
-    function updateCard() {
-        const c = cards.find(x => x.id === editingId);
-        c.content = document.getElementById('editArea').value;
-        c.tags = (c.content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
-        localStorage.setItem('Z_Cards_V7', JSON.stringify(cards));
-        closeModal(); renderBoard(); updateStats();
+    function setUIMode(mode) {
+        document.body.classList.toggle('studio-active', mode === 'studio');
+        if(mode === 'studio') renderProject();
     }
 
-    function deleteCard(id) {
-        if(confirm('Delete permanently?')) {
-            cards = cards.filter(x => x.id !== id);
-            localStorage.setItem('Z_Cards_V7', JSON.stringify(cards));
-            closeModal(); renderBoard(); updateStats();
-        }
+    function toggleMidView() {
+        document.getElementById('midContent').classList.toggle('board-view');
     }
 
-    function closeModal() { document.getElementById('editModal').classList.add('hidden'); }
-    function checkReviewCount() {
-        const count = document.getElementById('c-r').innerText;
-        if(count > 0) document.getElementById('quickNotice').innerText = `🔔 ${count} CARDS NEED REVIEW`;
-    }
-
-    // 項目推播與導出邏輯保持不變...
-    function pushSelected() {
-        const checked = document.querySelectorAll('.card-checkbox:checked');
-        if(!checked.length) return;
-        setUIMode('studio');
+    function pushToStudio() {
+        const checked = document.querySelectorAll('.card-check:checked');
         checked.forEach(cb => {
             project.segments.push({ type: 'card', id: cb.value });
             project.segments.push({ type: 'text', content: '' });
         });
-        saveProject(); renderProject();
-        checked.forEach(cb => cb.checked = false);
+        localStorage.setItem('Z_Proj_V11', JSON.stringify(project));
+        setUIMode('studio');
     }
 
     function renderProject() {
         document.getElementById('studioCanvas').innerHTML = project.segments.map((seg, idx) => {
             if(seg.type === 'card') {
                 const c = cards.find(x => x.id === seg.id);
-                return `<div class="p-4 bg-zinc-50 border-l-8 border-black text-xs italic relative group">
-                    <span class="font-900 mono underline cursor-pointer" onclick="openEdit('${c.id}')">[[${c.id}]]</span> ${c.content.substring(0,80)}...
-                    <button onclick="removeSeg(${idx})" class="absolute -right-2 -top-2 bg-red-500 text-white rounded-full w-5 h-5 hidden group-hover:flex items-center justify-center text-xs">×</button>
-                </div>`;
+                return `<div class="p-4 bg-zinc-50 border-l-8 border-black text-xs italic">[[${c.id}]] ${c.content.substring(0,100)}...</div>`;
             } else {
-                return `<textarea oninput="project.segments[${idx}].content=this.value;saveProject()" class="w-full min-h-[80px] text-sm outline-none bg-transparent border-b border-zinc-200 focus:border-black py-2" placeholder="撰寫發展段落...">${seg.content}</textarea>`;
+                return `<textarea oninput="project.segments[${idx}].content=this.value" class="w-full min-h-[100px] text-sm outline-none bg-transparent border-b border-zinc-200 py-2">${seg.content}</textarea>`;
             }
         }).join('');
     }
-    function saveProject() { localStorage.setItem('Z_Proj_V7', JSON.stringify(project)); }
-    function removeSeg(idx) { project.segments.splice(idx, 1); saveProject(); renderProject(); }
-    function exportDoc() {
+
+    function exportProject() {
         const name = document.getElementById('projName').value;
         let md = `# ${name}\n\n`;
         project.segments.forEach(s => {
