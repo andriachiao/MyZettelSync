@@ -2,100 +2,78 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>ZettelStudio PRO | Secure Sync</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZettelStudio PRO | Full System</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.11.0/Dropbox-sdk.min.js"></script>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #f4f4f4; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
         #v-in, #v-bd, #v-st { display: none; height: 100%; }
         .m-in #v-in, .m-bd #v-bd, .m-st #v-st { display: flex; flex-direction: column; }
-        .z-card { border: 3px solid #000; background: #fff; box-shadow: 6px 6px 0 #000; min-height: 250px; transition: 0.1s; position: relative; }
-        .active-btn { background: #000 !important; color: #fff !important; }
-        #auth-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: none; align-items: center; justify-content: center; }
+        .z-card { border: 3px solid #000; background: #fff; box-shadow: 6px 6px 0 #000; transition: 0.1s; min-height: 280px; }
+        .z-card:hover { transform: translate(-2px, -2px); box-shadow: 10px 10px 0 #000; }
+        .link-mode .z-card { border-color: #2563eb; cursor: crosshair; outline: 4px solid #2563eb; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 10px 20px; border-radius: 5px; opacity: 0; transition: 0.3s; z-index: 9999; pointer-events: none; }
     </style>
 </head>
 <body class="m-in">
-
-    <div id="auth-modal">
-        <div class="bg-white p-8 border-4 border-black shadow-[10px_10px_0_0_#000] max-w-lg w-full">
-            <h2 class="font-900 text-xl mb-4 uppercase italic">Connect Dropbox</h2>
-            <p class="text-xs mb-4 opacity-60">請貼上你在 Dropbox 生成的 Token。此代碼僅存在你的瀏覽器中，不會被上傳到 GitHub。</p>
-            <input id="token-input" type="password" class="w-full border-2 border-black p-2 mb-4 outline-none" placeholder="sl.u.xxxx...">
-            <button onclick="saveToken()" class="w-full bg-black text-white p-2 font-black">SAVE & CONNECT</button>
-        </div>
-    </div>
-
+    <div id="toast">Ready</div>
     <header class="h-14 border-b-4 border-black bg-white flex items-center justify-between px-6 shrink-0 z-50">
-        <h1 class="text-xl font-900 italic uppercase">ZettelStudio</h1>
-        <div class="flex gap-2">
-            <button id="status-chip" onclick="clearToken()" class="text-[9px] font-black border-2 border-black px-3 py-1 bg-zinc-200">OFFLINE</button>
+        <div class="flex items-center gap-4">
+            <h1 class="text-xl font-900 italic uppercase tracking-tighter">ZettelStudio</h1>
+            <div id="link-msg" class="hidden bg-blue-600 text-white text-[10px] px-3 py-1 animate-pulse font-black uppercase">Link Mode: Click Target Card</div>
         </div>
+        <button id="dbx-btn" onclick="auth()" class="text-[9px] font-black border-2 border-black px-4 py-1 bg-blue-500 text-white uppercase">Connect Dropbox</button>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside class="w-56 border-r-4 border-black bg-white flex flex-col shrink-0">
-            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('in')">CAPTURE</div>
-            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('bd')">VAULT</div>
-            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('st')">STUDIO</div>
+        <aside class="w-48 border-r-4 border-black bg-white flex flex-col shrink-0">
+            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('in')">CAPTURE [C+S+L]</div>
+            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('bd')">VAULT [C+S+B]</div>
+            <div class="p-4 border-b-2 border-black font-black text-xs hover:bg-black hover:text-white cursor-pointer" onclick="go('st')">STUDIO [C+S+M]</div>
+            <div id="tag-box" class="flex-1 overflow-y-auto no-scrollbar"></div>
         </aside>
 
         <main class="flex-1 flex overflow-hidden">
-            <section id="v-bd" class="flex-1 bg-zinc-200">
-                <div class="h-10 border-b border-black/10 flex items-center justify-between px-4 bg-white/50 shrink-0">
-                    <span class="text-[9px] font-black uppercase">Vault</span>
-                    <button onclick="push()" class="text-[9px] font-black bg-black text-white px-2 py-1">PUSH TO STUDIO</button>
+            <section id="v-in" class="flex-1 items-center pt-20 bg-zinc-100">
+                <div class="w-full max-w-xl bg-white border-4 border-black p-8 shadow-[12px_12px_0_0_#000]">
+                    <textarea id="ed" class="w-full h-64 text-2xl outline-none resize-none font-medium leading-relaxed" placeholder="Write something..."></textarea>
+                    <div class="mt-4 flex justify-between text-[9px] font-black opacity-30 uppercase">
+                        <span>Save & Sync: Cmd+Shift+L</span>
+                        <span>Switch View: Cmd+Shift+M</span>
+                    </div>
                 </div>
-                <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 overflow-y-auto"></div>
             </section>
 
-            <section id="v-in" class="flex-1 items-center pt-20">
-                <div class="w-full max-w-xl bg-white border-4 border-black p-8 shadow-[12px_12px_0_0_#000]">
-                    <div class="flex gap-2 mb-4">
-                        <button id="bi" onclick="setType('Idea')" class="px-4 py-1 border-2 border-black text-[10px] font-black active-btn uppercase">Idea</button>
-                        <button id="bq" onclick="setType('Quote')" class="px-4 py-1 border-2 border-black text-[10px] font-black uppercase">Quote</button>
-                    </div>
-                    <textarea id="ed" class="w-full h-64 text-2xl outline-none resize-none" placeholder="Thought..."></textarea>
-                    <div class="mt-4 text-[9px] font-black opacity-30 text-right uppercase">C+S+L to Save & Sync</div>
+            <section id="v-bd" class="flex-1 bg-zinc-200">
+                <div class="h-10 border-b border-black/10 flex items-center justify-between px-4 bg-white/50 shrink-0">
+                    <span class="text-[9px] font-black opacity-40 uppercase">Storage Vault</span>
+                    <button onclick="push()" class="text-[9px] font-black bg-black text-white px-3 py-1 uppercase">Push to Studio</button>
                 </div>
+                <div id="grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6 overflow-y-auto pb-32 no-scrollbar"></div>
             </section>
 
             <section id="v-st" class="flex-1 bg-white">
-                <div class="p-8 border-b-4 border-black flex justify-between items-center">
-                    <input id="title" class="text-3xl font-900 uppercase w-full outline-none" value="Untitled Draft">
-                    <button onclick="exp()" class="text-[9px] font-black border-2 border-black px-4 py-2 hover:bg-black hover:text-white transition">EXPORT</button>
+                <div class="p-10 border-b-4 border-black shrink-0 flex justify-between items-center bg-white">
+                    <input id="title" class="text-4xl font-900 uppercase w-full outline-none" value="Draft">
+                    <button onclick="exp()" class="text-[9px] font-black border-2 border-black px-5 py-2 hover:bg-black hover:text-white transition uppercase">Export MD</button>
                 </div>
-                <div id="canv" class="flex-1 p-10 overflow-y-auto space-y-6"></div>
+                <div id="canv" class="flex-1 p-12 overflow-y-auto space-y-10 no-scrollbar"></div>
             </section>
         </main>
     </div>
 
 <script>
-    let dbx = null, cards = JSON.parse(localStorage.getItem('Z_C')) || [], proj = JSON.parse(localStorage.getItem('Z_P')) || { s: [] }, type = 'Idea', lid = null;
+    // --- 配置區域 ---
+    const CLIENT_ID = '5nfhu325q1pi7qk'; 
+    const REDIRECT_URI = "https://andriachiao.github.io/MyZettelSync/";
 
-    // --- Token 安全處理 ---
-    function initDB() {
-        const savedToken = localStorage.getItem('Z_SECURE_TK');
-        if (!savedToken) {
-            document.getElementById('auth-modal').style.display = 'flex';
-        } else {
-            dbx = new Dropbox.Dropbox({ accessToken: savedToken });
-            const chip = document.getElementById('status-chip');
-            chip.innerText = "CONNECTED (CLICK TO RESET)";
-            chip.className = "text-[9px] font-black border-2 border-black px-3 py-1 bg-green-500 text-white cursor-pointer";
-        }
-    }
+    let dbx = null, cards = JSON.parse(localStorage.getItem('Z_C')) || [], proj = JSON.parse(localStorage.getItem('Z_P')) || { s: [] }, lid = null;
 
-    function saveToken() {
-        const tk = document.getElementById('token-input').value.trim();
-        if (tk) { localStorage.setItem('Z_SECURE_TK', tk); location.reload(); }
-    }
-
-    function clearToken() {
-        if(confirm('要登出並清除 Token 嗎？')) { localStorage.removeItem('Z_SECURE_TK'); location.reload(); }
-    }
-
-    // --- 核心邏輯 ---
+    // 快捷鍵邏輯
     window.onkeydown = e => {
         if ((e.metaKey || e.ctrlKey) && e.shiftKey) {
             const k = e.key.toLowerCase();
@@ -112,49 +90,106 @@
         if (m === 'in') setTimeout(()=>document.getElementById('ed').focus(), 50);
     }
 
+    // 儲存並自動同步
     function save() {
-        const c = document.getElementById('ed').value.trim();
-        if (!c) return;
+        const content = document.getElementById('ed').value.trim();
+        if (!content) return;
         const id = Math.random().toString(16).slice(2, 6).toUpperCase();
-        cards.unshift({ id, c, t: type, time: Date.now() });
+        cards.unshift({ id, c: content, time: Date.now() });
         document.getElementById('ed').value = "";
-        persist(); sync();
+        persist(); sync(); msg('SAVED #' + id);
         document.getElementById('ed').focus();
     }
 
-    function startLink(id, e) { e.stopPropagation(); lid = id; document.body.classList.add('link-mode'); go('bd'); }
-    function doneLink(id) { if(lid && lid !== id) { cards.find(x => x.id === id).c += `\n\n🔗 Related: [[${lid}]]`; persist(); } lid = null; document.body.classList.remove('link-mode'); renderBd(); }
+    // 鏈接邏輯 (Linking)
+    function startLink(id, e) {
+        e.stopPropagation(); lid = id;
+        document.body.classList.add('link-mode');
+        document.getElementById('link-msg').classList.remove('hidden');
+        go('bd');
+    }
+
+    function doneLink(id) {
+        if(lid && lid !== id) {
+            const target = cards.find(x => x.id === id);
+            target.c += `\n\n🔗 Related: [[${lid}]]`;
+            persist(); sync(); msg('LINKED!');
+        }
+        lid = null; document.body.classList.remove('link-mode');
+        document.getElementById('link-msg').classList.add('hidden');
+        renderBd();
+    }
 
     function renderBd() {
         document.getElementById('grid').innerHTML = cards.map(c => `
-            <div class="z-card p-4 flex flex-col" onclick="${lid ? `doneLink('${c.id}')` : ''}">
-                <div class="flex justify-between border-b-2 border-black pb-2 mb-2 text-[10px] font-black">
+            <div class="z-card p-5 flex flex-col" onclick="${lid ? `doneLink('${c.id}')` : ''}">
+                <div class="flex justify-between border-b-2 border-black pb-2 mb-3 text-[10px] font-black uppercase">
                     <span>#${c.id}</span>
-                    <button onclick="startLink('${c.id}', event)" class="text-blue-600">LINK</button>
+                    <button onclick="startLink('${c.id}', event)" class="text-blue-600 font-bold">LINK</button>
                 </div>
-                <div class="flex-1 overflow-y-auto text-sm prose prose-sm">${marked.parse(c.c)}</div>
-                <input type="checkbox" class="sel mt-2" value="${c.id}" onclick="event.stopPropagation()">
+                <div class="flex-1 overflow-y-auto no-scrollbar text-sm prose prose-sm leading-relaxed">${marked.parse(c.c)}</div>
+                <div class="mt-3 pt-2 border-t border-black/5 flex items-center justify-between">
+                    <input type="checkbox" class="sel w-4 h-4 border-2 border-black" value="${c.id}" onclick="event.stopPropagation()">
+                    <span class="text-[8px] opacity-30 font-black">${new Date(c.time).toLocaleDateString()}</span>
+                </div>
             </div>`).join('');
     }
 
     function renderSt() {
         document.getElementById('canv').innerHTML = proj.s.map((s, i) => s.type === 'card' ? 
-            `<div class="p-6 bg-white border-l-[12px] border-black shadow relative group">
-                <div class="text-blue-600 font-black text-[9px] mb-2 uppercase italic">[[${s.id}]]</div>
-                <div class="prose prose-sm">${marked.parse(cards.find(x => x.id === s.id).c)}</div>
-                <button onclick="proj.s.splice(${i},1);renderSt();" class="absolute top-2 right-2 hidden group-hover:block text-red-500 font-black text-[9px]">DEL</button>
+            `<div class="p-8 bg-white border-l-[16px] border-black shadow relative group">
+                <div class="text-blue-600 font-black text-[10px] mb-2 italic uppercase">[[${s.id}]]</div>
+                <div class="prose prose-sm leading-relaxed">${marked.parse(cards.find(x => x.id === s.id).c)}</div>
+                <button onclick="proj.s.splice(${i},1);renderSt();" class="absolute top-4 right-4 hidden group-hover:block text-red-500 font-black text-[9px]">REMOVE</button>
             </div>` : 
-            `<textarea oninput="proj.s[${i}].c=this.value;persist();" class="w-full text-xl border-b-2 border-zinc-100 focus:border-black outline-none py-2 font-serif italic" placeholder="Bridge text...">${s.c}</textarea>`
+            `<textarea oninput="proj.s[${i}].c=this.value;persist();" class="w-full text-xl border-b-2 border-zinc-100 focus:border-black outline-none py-4 font-serif italic" placeholder="Bridge text here...">${s.c}</textarea>`
         ).join('');
     }
 
-    async function sync() { if (dbx) await dbx.filesUpload({ path: '/v_cards.json', contents: JSON.stringify(cards), mode: 'overwrite' }); }
-    function push() { document.querySelectorAll('.sel:checked').forEach(cb => { proj.s.push({ type: 'card', id: cb.value }, { type: 'text', c: '' }); }); persist(); go('st'); }
-    function exp() { const m = proj.s.map(s => s.type === 'card' ? `\n> ${cards.find(x => x.id === s.id).c}\n` : s.c).join('\n'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([m], {type:'text/markdown'})); a.download = 'Draft.md'; a.click(); }
-    function setType(t) { type = t; document.getElementById('bi').classList.toggle('active-btn', t==='Idea'); document.getElementById('bq').classList.toggle('active-btn', t==='Quote'); }
-    function persist() { localStorage.setItem('Z_C', JSON.stringify(cards)); localStorage.setItem('Z_P', JSON.stringify(proj)); }
+    // Dropbox 認證
+    function auth() {
+        const a = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
+        window.location.href = a.getAuthenticationUrl(REDIRECT_URI);
+    }
 
-    window.onload = () => { initDB(); go('in'); };
+    async function sync() {
+        if (!dbx) return;
+        try {
+            await dbx.filesUpload({ path: '/zettel_vault.json', contents: JSON.stringify(cards), mode: 'overwrite' });
+            await dbx.filesUpload({ path: '/zettel_proj.json', contents: JSON.stringify(proj), mode: 'overwrite' });
+        } catch(e) { console.error(e); }
+    }
+
+    function push() {
+        document.querySelectorAll('.sel:checked').forEach(cb => {
+            proj.s.push({ type: 'card', id: cb.value }, { type: 'text', c: '' });
+        });
+        persist(); go('st');
+    }
+
+    function exp() {
+        const m = proj.s.map(s => s.type === 'card' ? `\n> ${cards.find(x => x.id === s.id).c}\n` : s.c).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([m], {type:'text/markdown'})); a.download = 'Zettel_Draft.md'; a.click();
+    }
+
+    function persist() { localStorage.setItem('Z_C', JSON.stringify(cards)); localStorage.setItem('Z_P', JSON.stringify(proj)); }
+    function msg(m) { const t = document.getElementById('toast'); t.innerText = m; t.classList.add('opacity-100'); setTimeout(() => t.classList.remove('opacity-100'), 2000); }
+
+    window.onload = () => {
+        const h = new URLSearchParams(window.location.hash.slice(1));
+        if (h.get('access_token')) {
+            localStorage.setItem('db_tk', h.get('access_token'));
+            window.history.replaceState({}, "", window.location.pathname);
+        }
+        const tk = localStorage.getItem('db_tk');
+        if (tk) {
+            dbx = new Dropbox.Dropbox({ accessToken: tk });
+            document.getElementById('dbx-btn').innerText = "CLOUD ACTIVE";
+            document.getElementById('dbx-btn').classList.replace('bg-blue-500', 'bg-green-600');
+            sync();
+        }
+        go('in');
+    };
 </script>
 </body>
 </html>
