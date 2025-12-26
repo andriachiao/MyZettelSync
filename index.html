@@ -2,335 +2,234 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZettelStudio PRO | Total Workflow</title>
+    <title>ZettelStudio PRO | 404 Fixed Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.11.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #f0f0f0; height: 100vh; overflow: hidden; display: flex; flex-direction: column; color: #1a1a1a; }
+        body { font-family: 'Inter', sans-serif; background: #f5f5f5; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* 視圖切換狀態控制 */
-        #view-input, #view-board, #view-studio { display: none; height: 100%; }
-        .mode-input #view-input { display: flex; flex-direction: column; align-items: center; }
-        .mode-board #view-board { display: flex; flex-direction: column; }
-        .mode-studio #view-studio { display: flex; }
+        #midEditor, #midBoard, #studioSide { display: none; height: 100%; }
+        .view-input #midEditor { display: flex; flex-direction: column; flex: 1; align-items: center; }
+        .view-board #midBoard { display: flex; flex-direction: column; flex: 1; }
+        .view-studio #studioSide { display: flex; flex: 1; }
+        .view-studio.show-board #midBoard { display: flex; width: 450px; border-right: 4px solid black; }
+
+        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1.5rem; padding: 2rem; }
+        .board-card { border: 3px solid #000; background: #fff; box-shadow: 6px 6px 0 #000; cursor: pointer; display: flex; flex-direction: column; height: 300px; transition: 0.1s; position: relative; }
+        .board-card:hover { transform: translate(-2px, -2px); box-shadow: 10px 10px 0 #000; }
         
-        /* 看板擴展模式 (在工作室中顯示看板) */
-        .mode-studio.show-aux-board #view-board { display: flex; width: 450px; border-right: 4px solid black; position: relative; z-index: 10; }
-
-        /* 卡片樣式 (新醜風/包浩斯風格) */
-        .card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; padding: 2rem; }
-        .z-card { border: 3px solid #000; background: #fff; box-shadow: 8px 8px 0 #000; transition: 0.15s; display: flex; flex-direction: column; height: 320px; position: relative; }
-        .z-card:hover { transform: translate(-3px, -3px); box-shadow: 12px 12px 0 #000; }
-        .z-card-header { border-bottom: 2px solid #000; padding: 0.5rem 1rem; font-family: 'JetBrains Mono'; font-size: 11px; font-weight: 800; display: flex; justify-content: space-between; align-items: center; }
+        .active-type { background: black !important; color: white !important; }
+        .kb-hint { font-family: 'JetBrains Mono'; font-size: 10px; background: #000; padding: 2px 5px; border-radius: 3px; color: #fff; margin-left: 5px; }
         
-        /* 快捷鍵提示 */
-        .kb-hint { font-family: 'JetBrains Mono'; font-size: 9px; background: #000; color: #fff; padding: 2px 5px; border-radius: 3px; margin-left: 6px; text-transform: uppercase; }
-        .active-btn { background: #000 !important; color: #fff !important; }
-
-        /* 全局 Toast */
-        #toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #000; color: #fff; padding: 12px 24px; border-radius: 4px; font-weight: 800; opacity: 0; transition: 0.3s; z-index: 9999; }
-        #toast.visible { opacity: 1; }
-
-        /* 連結模式過濾器 */
-        .linking-active .z-card { border-color: #2563eb; cursor: crosshair; }
-        .linking-active .z-card:hover { background: #eff6ff; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: black; color: white; padding: 10px 20px; border-radius: 5px; opacity: 0; transition: 0.3s; z-index: 1000; pointer-events: none; }
+        #toast.show { opacity: 1; }
+        .linking-mode .board-card { border-color: #2563eb; outline: 4px solid #2563eb; }
     </style>
 </head>
-<body class="mode-input">
+<body id="mainBody" class="view-input">
 
-    <div id="toast">SYSTEM READY</div>
+    <div id="toast">Message</div>
 
-    <header class="h-14 border-b-4 border-black bg-white flex items-center justify-between px-6 z-[100] shrink-0">
-        <div class="flex items-center gap-8">
-            <h1 class="text-xl font-900 tracking-tighter italic uppercase">ZettelStudio</h1>
-            <div id="sync-tag" class="text-[9px] font-black border-2 border-black px-3 py-1 opacity-30 uppercase tracking-widest">Dropbox Offline</div>
+    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100] shrink-0">
+        <div class="flex items-center gap-6">
+            <h1 class="text-lg font-900 uppercase italic tracking-tighter">ZettelStudio</h1>
+            <div id="linkBanner" class="hidden bg-blue-600 text-white text-[10px] font-black px-4 py-1 animate-pulse uppercase">Linking Mode: Select Target Card</div>
         </div>
-        <div id="link-indicator" class="hidden text-[10px] font-black bg-blue-600 text-white px-6 py-1 animate-pulse uppercase">Select target card to create link</div>
-        <div class="flex gap-4">
-            <button id="aux-toggle" onclick="toggleAuxBoard()" class="hidden text-[9px] font-black border-2 border-black px-4 py-1 bg-yellow-400 uppercase">Toggle Vault</button>
-            <button id="dbx-auth-btn" onclick="startDropboxAuth()" class="text-[9px] font-black border-2 border-black px-4 py-1 bg-blue-500 text-white uppercase hover:invert">Link Dropbox</button>
+        <div class="flex gap-3">
+            <button id="studioBoardToggle" onclick="toggleStudioBoard()" class="hidden text-[9px] font-black border-2 border-black px-3 py-1 bg-yellow-400 uppercase">Show Vault</button>
+            <button onclick="handleCloud()" id="cloudBtn" class="text-[9px] font-black border-2 border-black px-3 py-1 bg-blue-500 text-white uppercase italic">Link Dropbox</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside class="w-60 border-r-4 border-black bg-white flex flex-col shrink-0">
-            <nav class="flex-1 overflow-y-auto no-scrollbar">
-                <div class="p-3 bg-zinc-100 text-[9px] font-black border-b-2 border-black uppercase opacity-60">Workflow</div>
-                <div class="group p-4 border-b-2 border-black cursor-pointer hover:bg-black hover:text-white transition" onclick="switchMode('input')">
-                    <div class="text-xs font-black uppercase flex justify-between">Capture <span class="kb-hint group-hover:bg-white group-hover:text-black">C+S+M</span></div>
-                </div>
-                <div class="group p-4 border-b-2 border-black cursor-pointer hover:bg-black hover:text-white transition" onclick="switchMode('board')">
-                    <div class="text-xs font-black uppercase flex justify-between">Vault <span class="kb-hint group-hover:bg-white group-hover:text-black">C+S+B</span></div>
-                </div>
-                <div class="group p-4 border-b-2 border-black cursor-pointer hover:bg-black hover:text-white transition" onclick="switchMode('studio')">
-                    <div class="text-xs font-black uppercase flex justify-between">Studio <span class="kb-hint group-hover:bg-white group-hover:text-black">C+S+M</span></div>
-                </div>
-
-                <div class="p-3 bg-zinc-100 text-[9px] font-black border-y-2 border-black uppercase opacity-60 mt-4">Collection</div>
-                <div id="tag-list" class="flex flex-col"></div>
-            </nav>
+            <div class="flex-1 overflow-y-auto no-scrollbar">
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-b-2 border-black uppercase">Workflow</div>
+                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between uppercase" onclick="changeView('input')"><span>Capture</span><span class="kb-hint">C+S+M</span></div>
+                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between uppercase" onclick="changeView('board')"><span>Vault</span><span class="kb-hint">C+S+B</span></div>
+                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between uppercase" onclick="changeView('studio')"><span>Studio</span><span class="kb-hint">C+S+M</span></div>
+                
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-y-2 border-black uppercase mt-4">Keywords</div>
+                <div id="tagBox" class="flex flex-col"></div>
+            </div>
         </aside>
 
-        <div class="flex-1 flex overflow-hidden">
-            <section id="view-board" class="flex-1 overflow-hidden bg-zinc-200">
-                <div class="h-10 border-b border-black/10 bg-white/50 flex items-center px-4 justify-between shrink-0">
-                    <span class="text-[9px] font-black opacity-40 uppercase">All Thoughts</span>
-                    <button onclick="sendToStudio()" class="text-[9px] font-black bg-black text-white px-3 py-1 uppercase">Add to Project</button>
+        <div class="flex-1 relative overflow-hidden flex">
+            <main id="midBoard" class="bg-zinc-200">
+                <div class="h-10 border-b border-black/10 flex justify-between items-center px-4 bg-white/50">
+                    <span class="text-[9px] font-black opacity-40 uppercase">Memory Vault</span>
+                    <button onclick="pushToStudio()" class="text-[9px] font-black bg-black text-white px-3 py-1 uppercase">Add to Studio</button>
                 </div>
-                <div id="card-grid" class="flex-1 overflow-y-auto card-grid no-scrollbar pb-32"></div>
-            </section>
+                <div id="boardGrid" class="flex-1 overflow-y-auto card-grid no-scrollbar pb-32"></div>
+            </main>
 
-            <section id="view-input" class="flex-1 pt-24 bg-zinc-100">
-                <div class="w-full max-w-2xl bg-white border-4 border-black p-10 shadow-[16px_16px_0_0_#000]">
-                    <div class="flex gap-2 mb-8">
-                        <button id="type-idea" onclick="changeType('Idea')" class="px-6 py-2 border-2 border-black text-[10px] font-black active-btn uppercase">Idea <span class="opacity-40 ml-2">C+S+1</span></button>
-                        <button id="type-quote" onclick="changeType('摘錄')" class="px-6 py-2 border-2 border-black text-[10px] font-black uppercase">Quote <span class="opacity-40 ml-2">C+S+2</span></button>
+            <main id="midEditor" class="pt-24 bg-zinc-100">
+                <div class="max-w-xl w-full bg-white p-10 border-4 border-black shadow-[12px_12px_0_0_#000]">
+                    <div class="flex gap-2 mb-6 text-[10px] font-black">
+                        <button id="ti" class="px-5 py-2 border-2 border-black active-type" onclick="setType('Idea')">IDEA <span class="opacity-40 ml-1">C+S+1</span></button>
+                        <button id="tq" class="px-5 py-2 border-2 border-black" onclick="setType('摘錄')">QUOTE <span class="opacity-40 ml-1">C+S+2</span></button>
                     </div>
-                    <textarea id="main-editor" class="w-full h-80 text-3xl font-medium outline-none resize-none leading-relaxed" placeholder="Record your thought..."></textarea>
-                    
-                    <div class="mt-10 border-t-2 border-black pt-6 grid grid-cols-2 gap-4">
-                        <div class="flex flex-col gap-1">
-                            <span class="text-[9px] font-black opacity-30 uppercase tracking-tighter">Save & Cloud Sync</span>
-                            <span class="text-xs font-black uppercase">Cmd + Shift + L</span>
-                        </div>
-                        <div class="flex flex-col gap-1">
-                            <span class="text-[9px] font-black opacity-30 uppercase tracking-tighter">Switch View Mode</span>
-                            <span class="text-xs font-black uppercase">Cmd + Shift + M</span>
-                        </div>
+                    <textarea id="mainIn" class="w-full h-72 text-2xl outline-none leading-relaxed resize-none font-medium" placeholder="Record..."></textarea>
+                    <div class="mt-8 border-t-2 border-dashed border-zinc-200 pt-4 flex flex-col gap-2">
+                        <div class="flex justify-between items-center text-[10px] font-black text-zinc-400 uppercase"><span>Save & Sync</span><span class="kb-hint">Cmd + Shift + L</span></div>
+                        <div class="flex justify-between items-center text-[10px] font-black text-zinc-400 uppercase"><span>Studio Mode</span><span class="kb-hint">Cmd + Shift + M</span></div>
                     </div>
                 </div>
-            </section>
+            </main>
 
-            <section id="view-studio" class="flex-1 bg-white overflow-hidden">
-                <div class="flex flex-col w-full h-full">
-                    <header class="p-10 border-b-4 border-black shrink-0">
-                        <input id="project-title" class="text-4xl font-900 uppercase w-full outline-none" value="Untitled Draft">
-                        <div class="mt-4 flex gap-6">
-                            <div class="flex items-center gap-2 text-[10px] font-black uppercase opacity-40">Export MD <span class="kb-hint">C+S+E</span></div>
-                            <div class="flex items-center gap-2 text-[10px] font-black uppercase opacity-40">Clear Project <span class="kb-hint">C+S+P</span></div>
-                        </div>
-                    </header>
-                    <div id="studio-canvas" class="flex-1 overflow-y-auto p-12 no-scrollbar bg-zinc-50/50 space-y-12"></div>
+            <main id="studioSide" class="bg-white flex-col">
+                <div class="p-8 border-b-4 border-black shrink-0">
+                    <input id="projName" class="font-900 text-3xl uppercase outline-none w-full" value="Untitled Project">
+                    <div class="mt-4 flex gap-6 text-[9px] font-black opacity-40 uppercase">
+                        <span>Export MD <span class="kb-hint">C+S+E</span></span>
+                        <span>Clear <span class="kb-hint">C+S+P</span></span>
+                    </div>
                 </div>
-            </section>
+                <div id="studioCanvas" class="flex-1 overflow-y-auto p-12 no-scrollbar space-y-10"></div>
+            </main>
         </div>
     </div>
 
 <script>
-    // --- 核心配置 ---
-    const APP_KEY = 'r8nisc7hr8cta77'; // 用戶提供的 App Key
+    const CLIENT_ID = 'r8nisc7hr8cta77'; 
     let dbx = null;
-    let cards = JSON.parse(localStorage.getItem('ZS_Cards_V21')) || [];
-    let project = JSON.parse(localStorage.getItem('ZS_Proj_V21')) || { segments: [] };
-    let currentMode = 'Idea';
+    let cards = JSON.parse(localStorage.getItem('Z_PRO_Cards')) || [];
+    let project = JSON.parse(localStorage.getItem('Z_PRO_Proj')) || { segments: [] };
+    let currentType = 'Idea';
     let linkSourceId = null;
 
-    // --- 快捷鍵路由系統 (防衝突) ---
-    const CONFIG = {
-        save: 'l',    // Cmd+Shift+L
-        mode: 'm',    // Cmd+Shift+M (切換 Input/Studio)
-        vault: 'b',   // Cmd+Shift+B
-        export: 'e',  // Cmd+Shift+E
-        clear: 'p',   // Cmd+Shift+P
-        idea: '!',    // Cmd+Shift+1
-        quote: '@'    // Cmd+Shift+2
-    };
-
+    // --- 快捷鍵配置 ---
     window.addEventListener('keydown', e => {
         const cmdShift = (e.metaKey || e.ctrlKey) && e.shiftKey;
         if (!cmdShift) return;
         const key = e.key.toLowerCase();
-
         if (['l','m','b','e','p','1','2','!','@'].includes(key)) e.preventDefault();
 
-        if (key === CONFIG.save) performSave();
-        if (key === CONFIG.mode) switchMode(document.body.className.includes('mode-input') ? 'studio' : 'input');
-        if (key === CONFIG.vault) switchMode('board');
-        if (key === CONFIG.export) exportToMarkdown();
-        if (key === CONFIG.clear) clearProject();
-        if (key === CONFIG.idea || key === '1') changeType('Idea');
-        if (key === CONFIG.quote || key === '2') changeType('摘錄');
+        if (key === 'l') saveCard();
+        if (key === 'm') changeView(document.body.className.includes('view-input') ? 'studio' : 'input');
+        if (key === 'b') changeView('board');
+        if (key === 'e') exportDraft();
+        if (key === 'p') { if(confirm('Clear?')) { project.segments = []; renderStudio(); } }
+        if (key === '!' || key === '1') setType('Idea');
+        if (key === '@' || key === '2') setType('摘錄');
     });
 
-    // --- 模式與介面控制 ---
-    function switchMode(m) {
-        document.body.className = 'mode-' + m;
-        document.getElementById('aux-toggle').classList.toggle('hidden', m !== 'studio');
-        if (m === 'board' || m === 'studio') renderBoard();
-        if (m === 'studio') renderStudio();
-        if (m === 'input') setTimeout(() => document.getElementById('main-editor').focus(), 100);
+    // --- 核心功能 ---
+    function changeView(v) {
+        document.body.className = 'view-' + v;
+        document.getElementById('studioBoardToggle').classList.toggle('hidden', v !== 'studio');
+        if (v === 'board' || v === 'studio') renderBoard();
+        if (v === 'studio') renderStudio();
+        if (v === 'input') setTimeout(() => document.getElementById('mainIn').focus(), 50);
     }
 
-    function toggleAuxBoard() {
-        document.body.classList.toggle('show-aux-board');
-        renderBoard();
-    }
-
-    function changeType(t) {
-        currentMode = t;
-        document.getElementById('type-idea').classList.toggle('active-btn', t === 'Idea');
-        document.getElementById('type-quote').classList.toggle('active-btn', t === '摘錄');
-    }
-
-    // --- 核心邏輯: 保存與同步 ---
-    function performSave() {
-        const content = document.getElementById('main-editor').value.trim();
-        if (!content) return;
-
+    function saveCard() {
+        const val = document.getElementById('mainIn').value.trim();
+        if (!val) return;
         const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        const tags = (content.match(/#([^\s#]+)/g) || []).map(t => t.substring(1));
-
-        cards.unshift({ id, content, type: currentMode, tags, time: Date.now() });
-        document.getElementById('main-editor').value = "";
-        
-        persistData();
-        updateTagCloud();
-        if (dbx) cloudSync();
-        notify(`SAVED CARD #${id} - READY FOR NEXT`);
+        cards.unshift({ id, content: val, mode: currentType, time: Date.now(), tags: (val.match(/#([^\s#]+)/g) || []).map(t => t.substring(1)) });
+        document.getElementById('mainIn').value = "";
+        saveData(); updateStats(); if (dbx) syncNow();
+        showToast(`Saved #${id} (Syncing...)`);
+        document.getElementById('mainIn').focus();
     }
 
-    // --- 核心邏輯: 卡片鏈接 (Linking) ---
-    function initiateLink(id, e) {
-        e.stopPropagation();
-        linkSourceId = id;
-        document.body.classList.add('linking-active');
-        document.getElementById('link-indicator').classList.remove('hidden');
-        switchMode('board');
+    function renderBoard() {
+        const grid = document.getElementById('boardGrid');
+        grid.innerHTML = cards.map(c => `
+            <div class="board-card p-5" onclick="${linkSourceId ? `finishLink('${c.id}')` : ''}">
+                <div class="flex justify-between border-b border-black pb-2 mb-3 text-[10px] font-black uppercase">
+                    <span>#${c.id}</span>
+                    <div class="flex gap-2">
+                        <button onclick="startLink('${c.id}', event)" class="text-blue-600 font-bold italic">Link</button>
+                        <input type="checkbox" class="card-sel w-4 h-4 border-2 border-black" value="${c.id}" onclick="event.stopPropagation()">
+                    </div>
+                </div>
+                <div class="flex-1 text-sm overflow-y-auto no-scrollbar prose prose-sm leading-relaxed">${marked.parse(c.content)}</div>
+            </div>`).join('');
     }
 
-    function completeLink(id) {
-        if (linkSourceId && linkSourceId !== id) {
-            const target = cards.find(c => c.id === id);
-            target.content += `\n\n🔗 [[${linkSourceId}]]`;
-            persistData();
-            notify(`LINKED #${linkSourceId} TO #${id}`);
+    function startLink(id, e) {
+        e.stopPropagation(); linkSourceId = id;
+        document.body.classList.add('linking-mode');
+        document.getElementById('linkBanner').classList.remove('hidden');
+        changeView('board');
+    }
+
+    function finishLink(id) {
+        if(linkSourceId && linkSourceId !== id) {
+            const target = cards.find(x => x.id === id);
+            target.content += `\n\nRelated: [[${linkSourceId}]]`;
+            saveData(); showToast(`Linked #${linkSourceId} -> #${id}`);
         }
-        cancelLink();
-    }
-
-    function cancelLink() {
         linkSourceId = null;
-        document.body.classList.remove('linking-active');
-        document.getElementById('link-indicator').classList.add('hidden');
+        document.body.classList.remove('linking-mode');
+        document.getElementById('linkBanner').classList.add('hidden');
         renderBoard();
-    }
-
-    // --- 核心邏輯: 工作室管理 ---
-    function sendToStudio() {
-        const selected = Array.from(document.querySelectorAll('.card-check:checked')).map(el => el.value);
-        selected.forEach(id => {
-            project.segments.push({ type: 'card', id });
-            project.segments.push({ type: 'text', content: '' });
-        });
-        persistData();
-        switchMode('studio');
     }
 
     function renderStudio() {
-        const container = document.getElementById('studio-canvas');
-        container.innerHTML = project.segments.map((seg, idx) => {
-            if (seg.type === 'card') {
-                const card = cards.find(c => c.id === seg.id);
-                return `
-                <div class="bg-white border-l-[16px] border-black p-8 shadow-sm group relative">
-                    <div class="font-black text-blue-600 text-[10px] mb-4">SEGMENT: [[${card.id}]]</div>
-                    <div class="prose prose-zinc prose-sm leading-relaxed">${marked.parse(card.content)}</div>
-                    <button onclick="removeSegment(${idx})" class="absolute top-4 right-4 hidden group-hover:block text-[9px] font-black border border-red-200 px-2 py-1 text-red-500">REMOVE</button>
-                </div>`;
-            } else {
-                return `
-                <textarea oninput="project.segments[${idx}].content=this.value; persistData();" 
-                    class="w-full min-h-[150px] bg-transparent outline-none text-xl font-serif italic border-b-2 border-zinc-200 focus:border-black py-4 transition" 
-                    placeholder="Synthesize thoughts here...">${seg.content}</textarea>`;
-            }
-        }).join('');
+        document.getElementById('studioCanvas').innerHTML = project.segments.map((seg, idx) => seg.type === 'card' ? 
+            `<div class="p-8 bg-white border-l-[16px] border-black shadow-sm relative group">
+                <div class="text-blue-600 font-black text-[10px] mb-2">SEGMENT [[${seg.id}]]</div>
+                <div class="prose prose-sm">${marked.parse(cards.find(x => x.id === seg.id).content)}</div>
+                <button onclick="removeSeg(${idx})" class="absolute top-2 right-2 hidden group-hover:block text-red-500 font-black text-[9px]">REMOVE</button>
+            </div>` : 
+            `<textarea oninput="project.segments[${idx}].content=this.value; saveData();" class="w-full min-h-[120px] text-xl outline-none bg-transparent border-b-2 border-zinc-100 focus:border-black py-4 font-serif italic" placeholder="Add bridging text...">${seg.content}</textarea>`
+        ).join('');
     }
 
-    // --- 核心邏輯: Dropbox 通訊 (修復 404) ---
-    function startDropboxAuth() {
-        const auth = new Dropbox.DropboxAuth({ clientId: APP_KEY });
-        // 強制生成純淨的跳轉地址
+    // --- Dropbox 404 修復 ---
+    function handleCloud() {
+        const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
+        // 核心修正：移除所有 hash 和 search，確保跳轉地址絕對匹配後台
         const redirectUri = window.location.origin + window.location.pathname;
-        window.location.href = auth.getAuthenticationUrl(redirectUri);
+        window.location.href = dbxAuth.getAuthenticationUrl(redirectUri);
     }
 
-    async function cloudSync() {
+    async function syncNow() {
         if (!dbx) return;
         try {
-            await dbx.filesUpload({ path: '/vault_v21.json', contents: JSON.stringify(cards), mode: 'overwrite' });
-            await dbx.filesUpload({ path: '/studio_v21.json', contents: JSON.stringify(project), mode: 'overwrite' });
-            document.getElementById('sync-tag').classList.replace('opacity-30', 'bg-green-500');
-            document.getElementById('sync-tag').innerText = "Cloud Synced";
-        } catch (e) { console.error(e); }
+            await dbx.filesUpload({ path: '/zettel_vault.json', contents: JSON.stringify(cards), mode: 'overwrite' });
+            await dbx.filesUpload({ path: '/zettel_studio.json', contents: JSON.stringify(project), mode: 'overwrite' });
+        } catch(e) { console.error(e); }
     }
 
-    // --- 基礎渲染功能 ---
-    function renderBoard() {
-        const grid = document.getElementById('card-grid');
-        grid.innerHTML = cards.map(c => `
-            <div class="z-card" onclick="${linkSourceId ? `completeLink('${c.id}')` : ''}">
-                <div class="z-card-header">
-                    <span>#${c.id}</span>
-                    <div class="flex gap-3">
-                        <button onclick="initiateLink('${c.id}', event)" class="hover:underline text-blue-600">LINK</button>
-                        <input type="checkbox" class="card-check w-4 h-4 border-2 border-black" value="${c.id}" onclick="event.stopPropagation()">
-                    </div>
-                </div>
-                <div class="flex-1 p-5 overflow-y-auto no-scrollbar prose prose-sm">${marked.parse(c.content)}</div>
-                <div class="p-3 border-t border-zinc-100 flex justify-between text-[8px] font-black opacity-30 uppercase">
-                    <span>${c.type}</span><span>${new Date(c.time).toLocaleDateString()}</span>
-                </div>
-            </div>`).join('');
-    }
-
-    function updateTagCloud() {
-        const tags = {};
-        cards.forEach(c => c.tags.forEach(t => tags[t] = (tags[t] || 0) + 1));
-        document.getElementById('tag-list').innerHTML = Object.entries(tags).map(([k, v]) => `
-            <div class="p-4 border-b-2 border-zinc-100 text-xs font-bold hover:bg-zinc-50 flex justify-between cursor-pointer">
-                <span>#${k}</span><span class="opacity-30">${v}</span>
-            </div>`).join('');
-    }
-
-    // --- 其他輔助功能 ---
-    function persistData() { localStorage.setItem('ZS_Cards_V21', JSON.stringify(cards)); localStorage.setItem('ZS_Proj_V21', JSON.stringify(project)); }
-    function notify(m) { const t = document.getElementById('toast'); t.innerText = m; t.classList.add('visible'); setTimeout(() => t.classList.remove('visible'), 2500); }
-    function removeSegment(i) { project.segments.splice(i, 1); persistData(); renderStudio(); }
-    function clearProject() { if (confirm('Clear Studio?')) { project.segments = []; persistData(); renderStudio(); } }
-    function exportToMarkdown() {
-        const title = document.getElementById('project-title').value;
-        let md = `# ${title}\n\n`;
-        project.segments.forEach(s => {
-            if (s.type === 'card') md += `> ${cards.find(c => c.id === s.id).content}\n\n`;
-            else md += s.content + "\n\n";
+    function pushToStudio() {
+        document.querySelectorAll('.card-sel:checked').forEach(cb => {
+            project.segments.push({ type: 'card', id: cb.value }, { type: 'text', content: '' });
         });
-        const blob = new Blob([md], { type: 'text/markdown' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${title}.md`; a.click();
+        saveData(); changeView('studio');
     }
 
-    // --- 初始化入口 ---
+    function exportDraft() {
+        const md = project.segments.map(s => s.type === 'card' ? `\n> ${cards.find(x => x.id === s.id).content}\n` : s.content).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'})); a.download = 'ZettelExport.md'; a.click();
+    }
+
+    function setType(t) { currentType = t; document.getElementById('ti').classList.toggle('active-type', t==='Idea'); document.getElementById('tq').classList.toggle('active-type', t==='摘錄'); }
+    function saveData() { localStorage.setItem('Z_PRO_Cards', JSON.stringify(cards)); localStorage.setItem('Z_PRO_Proj', JSON.stringify(project)); }
+    function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
+    function toggleStudioBoard() { document.body.classList.toggle('show-board'); }
+    function removeSeg(i) { project.segments.splice(i,1); saveData(); renderStudio(); }
+    function updateStats() {
+        const tags = {}; cards.forEach(c => c.tags.forEach(t => tags[t] = (tags[t]||0)+1));
+        document.getElementById('tagBox').innerHTML = Object.entries(tags).map(([k,v]) => `<div class="p-3 text-[11px] font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between uppercase"><span>#${k}</span><span>${v}</span></div>`).join('');
+    }
+
     window.onload = () => {
         const hash = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hash.get('access_token');
-        if (accessToken) {
-            localStorage.setItem('ZS_Token_V21', accessToken);
-            window.history.replaceState({}, "", window.location.pathname);
+        if (hash.get('access_token')) { localStorage.setItem('db_tk_pro', hash.get('access_token')); window.history.replaceState({}, "", window.location.pathname); }
+        const tk = localStorage.getItem('db_tk_pro');
+        if (tk) {
+            dbx = new Dropbox.Dropbox({ accessToken: tk });
+            document.getElementById('cloudBtn').innerText = "Sync Active";
+            document.getElementById('cloudBtn').classList.replace('bg-blue-500', 'bg-green-600');
         }
-        
-        const token = localStorage.getItem('ZS_Token_V21');
-        if (token) {
-            dbx = new Dropbox.Dropbox({ accessToken: token });
-            document.getElementById('dbx-auth-btn').innerText = "Cloud Active";
-            document.getElementById('dbx-auth-btn').classList.replace('bg-blue-500', 'bg-green-600');
-            cloudSync();
-        }
-        
-        updateTagCloud();
-        switchMode('input');
+        updateStats(); changeView('input');
     };
 </script>
 </body>
