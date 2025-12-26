@@ -3,289 +3,253 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ZET-SYNC ULTIMATE</title>
+    <title>ZET-SYNC | INDEX CARD PRO</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #f8fafc; color: #1e293b; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #e2e8f0; color: #1e293b; }
+        
+        /* 實體索引卡風格 */
+        .index-card {
+            background: #ffffff;
+            border-top: 24px solid #f1f5f9; /* 索引卡上沿 */
+            position: relative;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s;
+        }
+        .index-card::before {
+            content: ""; position: absolute; top: -18px; left: 20px;
+            width: 40px; height: 12px; background: rgba(0,0,0,0.05); border-radius: 2px;
+        }
+        
         .wiki-link { color: #6366f1; font-weight: bold; cursor: pointer; text-decoration: underline; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .card-active { border-color: #6366f1; box-shadow: 0 0 0 2px #6366f133; }
+        
+        /* 背景快捷鍵說明 */
+        .shortcut-guide {
+            position: fixed; bottom: 20px; right: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px; color: #94a3b8; line-height: 1.6;
+            pointer-events: none; z-index: 0;
+            background: rgba(255,255,255,0.5); padding: 15px; border-radius: 15px;
+        }
     </style>
 </head>
 <body class="flex flex-col md:flex-row h-screen overflow-hidden">
 
-    <aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col shadow-sm z-30">
+    <div class="shortcut-guide hidden md:block">
+        <p class="font-black text-slate-500 mb-1 uppercase text-[9px]">Keyboard Shortcuts (Mac)</p>
+        <div>⇧ + ⌥ + 1 : 📚 摘錄模式</div>
+        <div>⇧ + ⌥ + 2 : 💡 靈感模式</div>
+        <div>⇧ + ⌥ + B : 📋 切換看板</div>
+        <div>⇧ + ⌥ + R : ⏳ 快速複閱</div>
+        <div>⇧ + ⌥ + F : 🔍 搜尋焦點</div>
+        <div>⌘ + ENTER : 💾 儲存卡片</div>
+        <div>ESC : ❌ 關閉彈窗</div>
+    </div>
+
+    <aside class="w-full md:w-72 bg-slate-900 text-white flex flex-col z-30 shadow-2xl">
         <div class="p-6">
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-xl font-900 tracking-tighter">ZET-SYNC <span class="text-[10px] bg-indigo-600 text-white px-1 rounded">PRO</span></h1>
-                <span id="cloudIndicator" class="text-[9px] font-bold opacity-50">OFFLINE</span>
-            </div>
+            <h1 class="text-xl font-900 tracking-tighter mb-1">ZET-SYNC</h1>
+            <div id="cloudIndicator" class="text-[9px] font-black opacity-40 uppercase tracking-widest mb-8 text-white">Cloud Disconnected</div>
             
-            <div id="revisitPanel" class="hidden mb-6 p-3 bg-amber-50 rounded-xl border border-amber-100">
-                <p class="text-[10px] font-black text-amber-600 uppercase mb-2">⏳ 需復閱 (Ctrl+R)</p>
+            <div id="revisitPanel" class="hidden mb-8 p-3 bg-white/10 rounded-xl border border-white/10">
+                <p class="text-[9px] font-black text-amber-400 uppercase mb-2">⏳ 需複閱 (⇧⌥R)</p>
                 <div id="revisitList" class="space-y-1"></div>
             </div>
 
-            <div class="mb-4 flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                <span>Tags & Boards</span>
-            </div>
-            <div id="tagList" class="flex-1 overflow-y-auto space-y-1 no-scrollbar max-h-[50vh]"></div>
+            <div class="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-4">Categories</div>
+            <div id="tagList" class="space-y-1 overflow-y-auto no-scrollbar max-h-[60vh]"></div>
         </div>
-        
-        <div class="mt-auto p-6 border-t border-slate-50 bg-slate-50/50">
-            <button onclick="authDropbox()" class="w-full py-2 text-[11px] font-bold bg-white border rounded-xl hover:bg-slate-100 transition">CONNECT DROPBOX</button>
+        <div class="mt-auto p-6 bg-black/20">
+            <button onclick="authDropbox()" class="w-full py-3 text-[10px] font-black bg-indigo-600 rounded-xl hover:bg-indigo-500 transition uppercase tracking-widest">Connect Dropbox</button>
         </div>
     </aside>
 
-    <main class="flex-1 overflow-y-auto no-scrollbar relative bg-slate-50">
-        <div class="max-w-4xl mx-auto p-6 md:p-12">
+    <main class="flex-1 overflow-y-auto no-scrollbar relative p-4 md:p-12">
+        <div class="max-w-3xl mx-auto">
             
-            <div class="flex gap-4 mb-8">
-                <div class="relative flex-1">
-                    <i class="fa-solid fa-search absolute left-4 top-1/2 -translate-y-1/2 text-slate-300 text-sm"></i>
-                    <input type="text" id="searchInput" oninput="renderCards()" placeholder="搜尋... (Ctrl+F)" 
-                        class="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border-none shadow-sm focus:ring-2 focus:ring-indigo-400 outline-none transition-all">
-                </div>
-                <button id="viewToggle" onclick="toggleView()" class="px-4 py-3 bg-white rounded-2xl shadow-sm text-slate-400 hover:text-indigo-600 transition">
-                    <i class="fa-solid fa-table-columns"></i>
-                </button>
+            <div class="mb-10">
+                <input type="text" id="searchInput" oninput="renderCards()" placeholder="Search your thoughts... (⇧⌥F)" 
+                    class="w-full px-6 py-4 bg-white/60 backdrop-blur rounded-2xl border-none shadow-inner focus:ring-2 focus:ring-indigo-400 outline-none transition-all">
             </div>
 
-            <div id="dropZone" class="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden mb-10 transition-all focus-within:shadow-xl focus-within:shadow-indigo-100/50">
-                <div class="px-6 py-3 bg-slate-50/50 border-b border-slate-50 flex justify-between items-center">
-                    <div id="entryBadge" class="text-[9px] font-black text-slate-400 uppercase tracking-widest">Standard Mode</div>
-                    <div class="text-[9px] font-bold text-slate-300">CMD+ENTER TO SAVE</div>
+            <div class="index-card rounded-2xl mb-12 overflow-hidden shadow-2xl border-t-[30px] border-indigo-600">
+                <div class="absolute top-[-22px] left-6 text-[10px] font-black text-white uppercase tracking-widest" id="entryTypeDisplay">Standard Entry</div>
+                <textarea id="cardInput" class="w-full p-8 text-lg border-none focus:ring-0 outline-none text-slate-700 placeholder-slate-300 min-h-[180px] leading-relaxed" 
+                    placeholder="Write something... use -tags and #keywords"></textarea>
+                <div class="px-8 py-3 bg-slate-50 border-t flex justify-between items-center text-[10px] font-bold text-slate-400 uppercase">
+                    <span>Press ⌘+Enter to file this card</span>
+                    <span id="charCount">0 chars</span>
                 </div>
-                <textarea id="cardInput" class="w-full p-8 text-lg border-none focus:ring-0 outline-none text-slate-700 placeholder-slate-200 min-h-[160px]" 
-                    placeholder="輸入內容... 使用 -標籤 和 #關鍵詞"></textarea>
-                <div id="imagePreview" class="px-8 pb-4 flex flex-wrap gap-2"></div>
             </div>
 
-            <div id="cardList" class="space-y-6 pb-40"></div>
+            <div id="cardList" class="space-y-8 pb-40"></div>
         </div>
     </main>
 
-    <div id="modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-        <div class="bg-white rounded-[40px] max-w-5xl w-full flex flex-col md:flex-row shadow-2xl overflow-hidden max-h-[85vh]">
-            <div class="flex-1 p-8 md:p-12 overflow-y-auto custom-scrollbar">
+    <div id="modal" class="hidden fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-[32px] max-w-4xl w-full flex flex-col md:flex-row shadow-2xl overflow-hidden max-h-[85vh]">
+            <div class="flex-1 p-8 md:p-12 overflow-y-auto">
                 <div id="modalHeader" class="mb-6"></div>
-                <div id="modalContent" class="prose prose-slate max-w-none text-slate-700 leading-relaxed"></div>
-                <div id="modalImages" class="mt-8 space-y-4"></div>
+                <div id="modalContent" class="prose prose-slate max-w-none text-lg"></div>
             </div>
-            <div class="w-full md:w-72 bg-slate-50 p-8 border-l border-slate-100">
+            <div class="w-full md:w-64 bg-slate-50 p-8 border-l border-slate-100 flex flex-col">
                 <h4 class="text-[10px] font-black text-slate-400 uppercase mb-4 tracking-widest">Backlinks</h4>
-                <div id="backlinksList" class="space-y-2 mb-8"></div>
-                <button onclick="closeModal()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-sm active:scale-95 transition">CLOSE (Esc)</button>
+                <div id="backlinksList" class="flex-1 space-y-2 mb-8"></div>
+                <button onclick="closeModal()" class="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-xs uppercase transition active:scale-95">Close (Esc)</button>
             </div>
         </div>
     </div>
 
 <script>
     let cards = JSON.parse(localStorage.getItem('zet_cards')) || [];
-    let db, dbx, pendingImages = [], currentView = 'stream', currentBoardKey = null;
-    const DBX_APP_KEY = '你的APP_KEY'; // <--- 記得換成你的！
-
-    // 初始化
-    const dbReq = indexedDB.open("ZetImages", 1);
-    dbReq.onupgradeneeded = e => e.target.result.createObjectStore("images", { keyPath: "id" });
-    dbReq.onsuccess = e => { db = e.target.result; updateUI(); };
+    let dbx, currentView = 'stream', currentBoardKey = null;
+    const DBX_APP_KEY = 'YOUR_APP_KEY'; // <--- 替換你的 Key
 
     window.onload = () => {
         initDropbox();
         initShortcuts();
-        initDragAndDrop();
+        renderTags();
+        renderCards();
+        document.getElementById('cardInput').addEventListener('input', e => {
+            document.getElementById('charCount').innerText = `${e.target.value.length} chars`;
+        });
     };
 
-    // --- 快捷鍵系統 (適配 Mac) ---
+    // --- 快捷鍵系統 (⇧ + ⌥ 優化版) ---
     function initShortcuts() {
         document.addEventListener('keydown', e => {
+            const isAction = e.shiftKey && e.altKey;
             const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
             const cmd = isMac ? e.metaKey : e.ctrlKey;
 
-            if (e.ctrlKey && e.key === '1') { e.preventDefault(); setEntryType('摘錄', 'text-indigo-600'); }
-            if (e.ctrlKey && e.key === '2') { e.preventDefault(); setEntryType('Idea', 'text-emerald-600'); }
-            if (e.ctrlKey && e.key === 'b') { e.preventDefault(); toggleView(); }
-            if (e.ctrlKey && e.key === 'r') { e.preventDefault(); focusRevisit(); }
-            if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('searchInput').focus(); }
+            if (isAction && e.key === '1') { e.preventDefault(); setMode('摘錄', 'border-indigo-600'); }
+            if (isAction && e.key === '2') { e.preventDefault(); setMode('Idea', 'border-emerald-500'); }
+            if (isAction && e.key === 'b') { e.preventDefault(); toggleView(); }
+            if (isAction && e.key === 'r') { e.preventDefault(); focusRevisit(); }
+            if (isAction && e.key === 'f') { e.preventDefault(); document.getElementById('searchInput').focus(); }
             if (cmd && e.key === 'Enter') { e.preventDefault(); saveCard(); }
             if (e.key === 'Escape') closeModal();
         });
     }
 
-    function setEntryType(type, color) {
+    function setMode(type, borderColor) {
+        document.querySelector('.index-card').style.borderTopColor = getComputedStyle(document.documentElement).getPropertyValue('--tw-border-opacity') ? borderColor : borderColor; 
+        // 簡單切換邊框顏色
+        const el = document.querySelector('.index-card');
+        el.className = el.className.replace(/border-t-\[.*?\]/, '');
+        document.getElementById('entryTypeDisplay').innerText = `${type} Mode`;
         const input = document.getElementById('cardInput');
-        document.getElementById('entryBadge').innerText = type + " Mode";
-        document.getElementById('entryBadge').className = `text-[9px] font-black uppercase tracking-widest ${color}`;
-        if (!input.value.includes(`-${type}`)) input.value += ` -${type} `;
+        if (!input.value.includes(`-${type}`)) input.value = `-${type} ` + input.value;
         input.focus();
     }
 
-    // --- 核心儲存邏輯 ---
-    async function saveCard() {
+    // --- 儲存與渲染 ---
+    function saveCard() {
         const input = document.getElementById('cardInput');
         const text = input.value.trim();
-        if (!text && pendingImages.length === 0) return;
+        if (!text) return;
 
         const tags = (text.match(/-[^\s]+/g) || []).map(t => t.substring(1));
-        const kws = (text.match(#[^\s]+/g) || []).map(k => k.substring(1));
+        const kws = (text.match(/#[^\s]+/g) || []).map(k => k.substring(1));
         const cardId = Math.random().toString(36).substr(2, 4).toUpperCase();
 
         const newCard = {
             id: cardId, fullId: Date.now(), content: text,
             tags: tags.length ? tags : ["未分類"],
-            keywords: kws, time: Date.now(), status: 'draft',
-            images: pendingImages.map(i => i.id),
-            order: 0 // 用於看板排序
+            keywords: kws, time: Date.now(), status: 'draft'
         };
-
-        if (pendingImages.length > 0) {
-            const tx = db.transaction("images", "readwrite");
-            pendingImages.forEach(img => tx.objectStore("images").put(img));
-        }
 
         cards.unshift(newCard);
         input.value = "";
-        pendingImages = [];
-        document.getElementById('imagePreview').innerHTML = "";
         saveAndRefresh();
         if (dbx) uploadToCloud();
     }
 
-    // --- 看板邏輯 ---
-    function toggleView() {
-        currentView = currentView === 'stream' ? 'board' : 'stream';
-        renderCards();
-    }
-
-    function moveOrder(fid, dir) {
-        const boardCards = cards.filter(c => c.tags.includes(currentBoardKey) || (c.keywords && c.keywords.includes(currentBoardKey)));
-        const idx = boardCards.findIndex(c => c.fullId == fid);
-        if (idx + dir < 0 || idx + dir >= boardCards.length) return;
-        
-        // 交換順序邏輯 (簡單實作：交換在 cards 陣列中的位置)
-        const globalIdx = cards.findIndex(c => c.fullId == fid);
-        const targetFid = boardCards[idx + dir].fullId;
-        const targetGlobalIdx = cards.findIndex(c => c.fullId == targetFid);
-        
-        [cards[globalIdx], cards[targetGlobalIdx]] = [cards[targetGlobalIdx], cards[globalIdx]];
-        saveAndRefresh();
-    }
-
-    // --- 渲染系統 ---
-    async function renderCards() {
+    function renderCards() {
         const list = document.getElementById('cardList');
         const term = document.getElementById('searchInput').value.toLowerCase();
         
-        let filtered = cards.filter(c => 
-            (term === "" || c.content.toLowerCase().includes(term) || (c.keywords && c.keywords.some(k => k.toLowerCase().includes(term))))
-        );
-
+        let filtered = cards.filter(c => (term === "" || c.content.toLowerCase().includes(term)));
         if (currentView === 'board' && currentBoardKey) {
-            filtered = filtered.filter(c => c.tags.includes(currentBoardKey) || (c.keywords && c.keywords.includes(currentBoardKey)));
+            filtered = filtered.filter(c => c.tags.includes(currentBoardKey) || c.keywords.includes(currentBoardKey));
         }
 
-        let html = "";
-        for (let c of filtered) {
-            const content = marked.parse(c.content.replace(/-[^\s]+|#[^\s]+/g, ''));
-            const isBoard = currentView === 'board';
-            
-            html += `
-                <div class="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm flex gap-4">
-                    ${isBoard ? `
-                    <div class="flex flex-col justify-center gap-4 text-slate-300">
-                        <button onclick="moveOrder(${c.fullId}, -1)" class="hover:text-indigo-500"><i class="fa-solid fa-chevron-up"></i></button>
-                        <button onclick="moveOrder(${c.fullId}, 1)" class="hover:text-indigo-500"><i class="fa-solid fa-chevron-down"></i></button>
-                    </div>` : ''}
-                    <div class="flex-1 cursor-pointer" onclick="showCardDetail('${c.fullId}')">
-                        <div class="flex justify-between items-start mb-4">
-                            <div class="flex flex-wrap gap-2">
-                                ${c.keywords ? c.keywords.map(k => `<span class="bg-amber-50 text-amber-600 text-[9px] font-black px-2 py-0.5 rounded-lg border border-amber-100">#${k}</span>`).join('') : ''}
-                            </div>
-                            <span class="text-[9px] font-mono text-slate-300">${c.id}</span>
-                        </div>
-                        <div class="prose prose-slate prose-sm line-clamp-3">${content}</div>
-                        <div class="mt-4 flex gap-2">
-                            ${c.tags.map(t => `<span class="text-indigo-400 text-[9px] font-bold uppercase tracking-widest">@${t}</span>`).join('')}
-                        </div>
+        list.innerHTML = filtered.map((c, i) => `
+            <div class="index-card rounded-2xl p-8 cursor-pointer hover:scale-[1.01] transition-all" onclick="showCardDetail('${c.fullId}')">
+                <div class="flex justify-between items-start mb-6">
+                    <div class="flex gap-2">
+                        ${c.keywords ? c.keywords.map(k => `<span class="bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded">#${k}</span>`).join('') : ''}
                     </div>
+                    <span class="font-mono text-[10px] text-slate-300">ID: ${c.id}</span>
                 </div>
-            `;
-        }
-        list.innerHTML = html || `<div class="text-center py-20 text-slate-300 font-bold italic">No cards found.</div>`;
+                <div class="prose prose-slate prose-sm line-clamp-4 mb-6">${marked.parse(c.content.replace(/-[^\s]+|#[^\s]+/g, ''))}</div>
+                <div class="flex justify-between items-end border-t border-slate-50 pt-4">
+                    <div class="flex gap-2">
+                        ${c.tags.map(t => `<span class="text-[9px] font-black text-indigo-400 uppercase tracking-tighter">@${t}</span>`).join('')}
+                    </div>
+                    <div class="text-[10px] font-bold text-slate-300 italic">${new Date(c.time).toLocaleDateString()}</div>
+                </div>
+                ${currentView === 'board' ? `
+                    <div class="absolute left-[-40px] top-1/2 -translate-y-1/2 flex flex-col gap-2 opacity-0 hover:opacity-100 transition">
+                        <button onclick="event.stopPropagation(); moveCard(${i}, -1)" class="bg-white p-2 rounded-full shadow text-xs"><i class="fa-solid fa-arrow-up"></i></button>
+                        <button onclick="event.stopPropagation(); moveCard(${i}, 1)" class="bg-white p-2 rounded-full shadow text-xs"><i class="fa-solid fa-arrow-down"></i></button>
+                    </div>
+                ` : ''}
+            </div>
+        `).join('');
     }
 
     function renderTags() {
         const tagCounts = {};
         cards.forEach(c => c.tags.forEach(t => tagCounts[t] = (tagCounts[t] || 0) + 1));
-        
         document.getElementById('tagList').innerHTML = Object.entries(tagCounts).map(([t, c]) => `
-            <div class="group flex justify-between items-center p-2 px-3 rounded-xl hover:bg-slate-50 transition cursor-pointer ${currentBoardKey === t ? 'bg-indigo-50' : ''}">
-                <span onclick="currentBoardKey='${t}'; currentView='board'; renderCards();" class="text-xs font-bold text-slate-600">@ ${t} <span class="opacity-30 text-[10px] ml-1">${c}</span></span>
-                <i onclick="deleteTag('${t}')" class="fa-solid fa-times text-[10px] text-slate-200 group-hover:text-red-400 p-1"></i>
+            <div class="group flex justify-between items-center px-4 py-2 rounded-xl cursor-pointer hover:bg-white/10 ${currentBoardKey === t ? 'bg-indigo-600' : ''}">
+                <span onclick="currentBoardKey='${t}'; currentView='board'; renderCards();" class="text-xs font-bold text-slate-300">@ ${t} <span class="opacity-30 ml-1 text-[10px]">${c}</span></span>
+                <i onclick="deleteTag('${t}')" class="fa-solid fa-trash text-[10px] text-slate-600 group-hover:text-red-400 ml-2"></i>
             </div>
         `).join('');
 
-        // 更新復閱
+        // 複閱清單
         const weekAgo = Date.now() - (7 * 24 * 60 * 60 * 1000);
         const revisit = cards.filter(c => c.time < weekAgo && c.status === 'draft').slice(0, 3);
         if (revisit.length > 0) {
             document.getElementById('revisitPanel').classList.remove('hidden');
-            document.getElementById('revisitList').innerHTML = revisit.map(c => `
-                <div onclick="showCardDetail('${c.fullId}')" class="text-[11px] text-amber-700 cursor-pointer hover:underline">→ ${c.id}</div>
-            `).join('');
+            document.getElementById('revisitList').innerHTML = revisit.map(c => `<div onclick="showCardDetail('${c.fullId}')" class="text-[10px] text-amber-200 hover:underline cursor-pointer tracking-tight">→ Card ${c.id}</div>`).join('');
         }
     }
 
     async function showCardDetail(fid) {
         const card = cards.find(c => c.fullId == fid);
-        const modal = document.getElementById('modal');
-        document.getElementById('modalHeader').innerHTML = `<h2 class="text-xs font-black text-indigo-500 uppercase tracking-widest">Card ${card.id} / ${new Date(card.time).toLocaleDateString()}</h2>`;
+        document.getElementById('modalHeader').innerHTML = `<h2 class="text-xs font-black text-indigo-500 uppercase tracking-widest">Index Card ${card.id}</h2>`;
         document.getElementById('modalContent').innerHTML = marked.parse(card.content).replace(/\[\[([A-Z0-9]+)\]\]/g, '<span class="wiki-link" onclick="jumpTo(\'$1\')">[[$1]]</span>');
         
-        // 反向連結
-        const backlinks = cards.filter(c => c.content.includes(`[[${card.id}]]`));
-        document.getElementById('backlinksList').innerHTML = backlinks.map(c => `
-            <div onclick="showCardDetail('${c.fullId}')" class="p-3 bg-white rounded-2xl border border-slate-100 text-[10px] font-bold cursor-pointer hover:border-indigo-400">[[${c.id}]]</div>
-        `).join('') || '<p class="text-[9px] text-slate-300 italic">No links yet.</p>';
-
-        modal.classList.remove('hidden');
+        const links = cards.filter(c => c.content.includes(`[[${card.id}]]`));
+        document.getElementById('backlinksList').innerHTML = links.map(c => `
+            <div onclick="showCardDetail('${c.fullId}')" class="p-3 bg-white rounded-xl border border-slate-100 text-[10px] font-bold cursor-pointer hover:border-indigo-400 truncate">[[${c.id}]] ${c.content.substring(0,10)}...</div>
+        `).join('') || '<p class="text-[10px] text-slate-300 italic">No links</p>';
+        document.getElementById('modal').classList.remove('hidden');
     }
 
-    function deleteTag(tagName) {
-        if (confirm(`Delete @${tagName} from all cards?`)) {
-            cards.forEach(c => {
-                c.tags = c.tags.filter(t => t !== tagName);
-                c.content = c.content.replace(new RegExp(`-${tagName}`, 'g'), '');
-            });
-            saveAndRefresh();
-        }
-    }
-
-    // --- 基礎工具 ---
-    function saveAndRefresh() {
-        localStorage.setItem('zet_cards', JSON.stringify(cards));
-        renderTags();
-        renderCards();
-    }
-    function updateUI() { renderTags(); renderCards(); }
+    function toggleView() { currentView = currentView === 'stream' ? 'board' : 'stream'; renderCards(); }
     function closeModal() { document.getElementById('modal').classList.add('hidden'); }
     function jumpTo(id) { const c = cards.find(x => x.id === id); if(c) showCardDetail(c.fullId); }
     function focusRevisit() { const first = document.querySelector('#revisitList div'); if(first) first.click(); }
+    function saveAndRefresh() { localStorage.setItem('zet_cards', JSON.stringify(cards)); renderTags(); renderCards(); }
     function authDropbox() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DBX_APP_KEY}&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`; }
     function initDropbox() {
         const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
         if (token) {
             dbx = new Dropbox.Dropbox({ accessToken: token });
-            document.getElementById('cloudIndicator').innerText = "ONLINE";
-            document.getElementById('cloudIndicator').className = "text-[9px] font-black text-green-500";
+            document.getElementById('cloudIndicator').innerText = "Cloud Online";
+            document.getElementById('cloudIndicator').classList.add('text-green-400');
         }
     }
-    function initDragAndDrop() { /* 保持原有的圖片拖拽邏輯 */ }
+    function deleteTag(t) { if(confirm(`Delete tag @${t}?`)) { cards.forEach(c => c.tags = c.tags.filter(tg => tg !== t)); saveAndRefresh(); } }
 </script>
 </body>
 </html>
