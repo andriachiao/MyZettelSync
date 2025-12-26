@@ -2,197 +2,215 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>MyZettelSync | 黑白索引</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyZettelSync | 側邊卡片盒版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;900&family=JetBrains+Mono:wght@500&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #ffffff; color: #000000; }
+        body { font-family: 'Inter', sans-serif; background: #ffffff; color: #000000; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
         
-        /* 極高對比度索引卡 */
-        .card-border { border: 2px solid #000000; }
-        .wiki-link { text-decoration: underline; font-weight: 900; cursor: pointer; }
-        
-        /* 角落狀態標記 */
-        .corner-tag { position: absolute; top: -1px; right: -1px; width: 20px; height: 20px; border: 2px solid #000000; }
-        .tag-摘錄 { background: #000000; }
-        .tag-Idea { background: #e5e7eb; }
-
-        .btn-black { background: #000000; color: #ffffff; padding: 4px 12px; font-weight: 900; font-size: 10px; }
-        .btn-white { background: #ffffff; color: #000000; border: 2px solid #000000; padding: 4px 12px; font-weight: 900; font-size: 10px; }
-        
+        /* 極簡邊框與滾動條 */
+        .border-main { border: 2px solid #000000; }
+        .border-r-main { border-right: 2px solid #000000; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
+        
+        /* 卡片縮圖樣式 */
+        .list-card { border-bottom: 1px solid #000000; transition: all 0.2s; cursor: pointer; }
+        .list-card:hover { background: #f4f4f5; }
+        .list-card.active { background: #000000; color: #ffffff; }
+
+        /* 內容區塊 */
+        .wiki-link { font-weight: 900; text-decoration: underline; cursor: pointer; }
+        
+        /* 標記 */
+        .revisit-blink { animation: blink 1s infinite; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
     </style>
 </head>
-<body class="h-screen overflow-hidden flex flex-col items-center justify-center p-4">
+<body class="flex flex-col">
 
-    <header class="fixed top-0 left-0 w-full p-6 flex justify-between items-center border-b-4 border-black bg-white z-50">
-        <h1 class="text-xl font-900 tracking-tighter uppercase">MyZettelSync</h1>
+    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 shrink-0 bg-white">
+        <h1 class="text-lg font-900 tracking-tighter uppercase">MyZettelSync</h1>
         <div class="flex gap-4 items-center">
-            <span id="revisitCount" class="bg-black text-white text-[10px] px-2 py-1 font-black hidden">需處理</span>
+            <button onclick="exportJSON()" class="text-[10px] font-black border-2 border-black px-2 py-0.5 uppercase">Export</button>
             <div id="statusDot" class="w-3 h-3 border-2 border-black rounded-full"></div>
         </div>
     </header>
 
-    <main id="editorSection" class="w-full max-w-2xl transition-all">
-        <div class="card-border p-8 relative shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
-            <div class="text-[10px] font-black mb-4 uppercase tracking-widest border-b-2 border-black pb-2" id="modeIndicator">Standard Write</div>
-            <textarea id="cardInput" autofocus class="w-full h-64 text-xl outline-none leading-relaxed placeholder-zinc-200" placeholder="寫入內容... 使用 #關鍵詞 或 [[ID]]"></textarea>
-            <div class="mt-4 flex justify-between items-center font-black text-[10px]">
-                <div class="flex gap-2 text-zinc-400">
-                    <span>⌘⇧1:摘錄</span> <span>⌘⇧2:IDEA</span> <span>⌘⇧S:儲存</span>
+    <div class="flex flex-1 overflow-hidden">
+        
+        <aside class="w-72 border-r-4 border-black flex flex-col shrink-0 bg-white">
+            <div class="p-4 border-b-2 border-black">
+                <input type="text" id="searchInput" oninput="renderSidebar()" placeholder="搜尋關鍵字..." 
+                    class="w-full text-xs font-black outline-none uppercase placeholder-zinc-300">
+            </div>
+            <div id="cardSidebar" class="flex-1 overflow-y-auto no-scrollbar">
                 </div>
-                <div id="charCount">0 CHARS</div>
-            </div>
-        </div>
-    </main>
+        </aside>
 
-    <section id="boardSection" class="hidden fixed inset-0 bg-white z-[60] p-10 overflow-y-auto no-scrollbar">
-        <div class="max-w-4xl mx-auto pt-20">
-            <div class="flex justify-between items-end mb-12 border-b-4 border-black pb-4">
-                <input type="text" id="searchInput" oninput="renderCards()" placeholder="搜尋或輸入 [[ID]] 連結" class="w-full text-4xl font-900 outline-none uppercase">
-                <button onclick="toggleView(false)" class="btn-black mb-2">返回 (ESC)</button>
-            </div>
-            
-            <div id="cardList" class="space-y-12 pb-40"></div>
-        </div>
-    </section>
-
-    <script>
-        let cards = JSON.parse(localStorage.getItem('zet_cards')) || [];
-        let dbx;
-        const DBX_APP_KEY = 'r8nisc7hr8cta77';
-
-        window.onload = () => {
-            initDropbox();
-            initShortcuts();
-            updateRevisitAlert();
-            document.getElementById('cardInput').addEventListener('input', e => {
-                document.getElementById('charCount').innerText = `${e.target.value.length} CHARS`;
-            });
-        };
-
-        function initShortcuts() {
-            document.addEventListener('keydown', e => {
-                const cmdShift = e.metaKey && e.shiftKey;
-                if (cmdShift && e.key === '1') { e.preventDefault(); setType('摘錄'); }
-                if (cmdShift && e.key === '2') { e.preventDefault(); setType('Idea'); }
-                if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
-                if (cmdShift && e.key === 'b') { e.preventDefault(); toggleView(true); }
-                if (e.key === 'Escape') toggleView(false);
-            });
-        }
-
-        function setType(t) {
-            document.getElementById('modeIndicator').innerText = `${t} MODE`;
-            const input = document.getElementById('cardInput');
-            if (!input.value.includes(`-${t}`)) input.value = `-${t} ` + input.value;
-            input.focus();
-        }
-
-        function saveCard() {
-            const input = document.getElementById('cardInput');
-            const text = input.value.trim();
-            if (!text) return;
-
-            const id = Math.random().toString(36).substr(2, 4).toUpperCase();
-            const tags = (text.match(/-[^\s]+/g) || []).map(t => t.substring(1));
-            const kws = (text.match(/#[^\s]+/g) || []).map(k => k.substring(1));
-
-            cards.unshift({ id, fullId: Date.now(), content: text, tags, keywords: kws, time: Date.now(), status: 'new' });
-            localStorage.setItem('zet_cards', JSON.stringify(cards));
-            
-            input.value = "";
-            alert("卡片已存檔");
-            updateRevisitAlert();
-            if (dbx) uploadToCloud();
-        }
-
-        function renderCards() {
-            const term = document.getElementById('searchInput').value.toLowerCase();
-            const list = document.getElementById('cardList');
-            const now = Date.now();
-            
-            list.innerHTML = cards.filter(c => c.content.toLowerCase().includes(term)).map(c => {
-                const isQuote = c.tags.includes('摘錄');
-                const isIdea = c.tags.includes('Idea');
-                const isOld = (now - c.time) > (24 * 60 * 60 * 1000); // 超過24小時未處理
-
-                return `
-                    <div class="card-border p-8 relative hover:shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] transition-all">
-                        <div class="corner-tag ${isQuote?'tag-摘錄':''} ${isIdea?'tag-Idea':''}"></div>
-                        <button onclick="deleteCard('${c.fullId}')" class="absolute top-4 right-8 font-black text-xl">×</button>
-                        
-                        <div class="mono text-[10px] font-bold mb-6">${c.id} // ${new Date(c.time).toLocaleString()}</div>
-                        
-                        <div class="prose prose-sm font-bold text-black mb-8">
-                            ${marked.parse(c.content.replace(/\[\[([A-Z0-9]+)\]\]/g, '<span class="wiki-link" onclick="jumpTo(\'$1\')">[[$1]]</span>'))}
-                        </div>
-
-                        <div class="flex flex-wrap gap-4 border-t-2 border-black pt-6">
-                            ${isOld ? '<span class="bg-black text-white text-[9px] px-2 py-1 font-black uppercase">REVISIT ⚡️</span>' : ''}
-                            <button onclick="updateStatus('${c.fullId}', 'link')" class="btn-white">發展/連結</button>
-                            <button onclick="updateStatus('${c.fullId}', 'archive')" class="btn-black">歸檔</button>
-                        </div>
+        <main class="flex-1 flex flex-col p-8 bg-zinc-50 overflow-y-auto no-scrollbar">
+            <div class="max-w-2xl w-full mx-auto space-y-8">
+                
+                <div class="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative">
+                    <div id="editorMode" class="text-[10px] font-black uppercase mb-4 border-b-2 border-black pb-2 flex justify-between">
+                        <span>New Thought</span>
+                        <span id="charCount">0 Chars</span>
                     </div>
-                `;
-            }).join('');
-        }
+                    <textarea id="cardInput" class="w-full h-64 text-xl outline-none leading-relaxed placeholder-zinc-200" 
+                        placeholder="在此寫入... 使用 #標籤 或 [[連結]]"></textarea>
+                    
+                    <div class="mt-6 flex justify-between items-center">
+                        <div class="flex gap-2 font-black text-[9px] text-zinc-400">
+                            <span>⌘⇧1:摘錄</span> <span>⌘⇧2:IDEA</span> <span>⌘⇧S:儲存</span>
+                        </div>
+                        <button onclick="saveCard()" class="bg-black text-white px-6 py-2 font-black text-xs uppercase">File Card</button>
+                    </div>
+                </div>
 
-        function deleteCard(fid) {
-            if (confirm('確定刪除此卡片？')) {
-                cards = cards.filter(c => c.fullId != fid);
-                saveAndRefresh();
-            }
-        }
+                <div id="revisitTool" class="hidden bg-white border-2 border-black p-6 space-y-4">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] font-black uppercase">處理選中卡片: <span id="selectedId"></span></span>
+                        <button onclick="deleteCard()" class="text-red-500 font-black text-[10px] uppercase">Delete</button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="actionLink()" class="flex-1 border-2 border-black py-2 font-black text-[10px] uppercase hover:bg-black hover:text-white transition">發展連結</button>
+                        <button onclick="actionArchive()" class="flex-1 border-2 border-zinc-200 py-2 font-black text-[10px] text-zinc-400 uppercase hover:border-black hover:text-black transition">歸檔</button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
 
-        function updateStatus(fid, status) {
-            const c = cards.find(c => c.fullId == fid);
-            if (status === 'archive') {
-                c.status = 'archived';
-                alert('已歸檔');
-            } else {
-                toggleView(false);
-                document.getElementById('cardInput').value = `[[${c.id}]] `;
-                document.getElementById('cardInput').focus();
-            }
+    <div class="fixed bottom-4 right-6 text-[9px] font-black text-zinc-200 pointer-events-none uppercase">
+        ⌘⇧1:Quote | ⌘⇧2:Idea | ⌘⇧S:Save | ⌘⇧B:Toggle List
+    </div>
+
+<script>
+    let cards = JSON.parse(localStorage.getItem('zet_cards')) || [];
+    let dbx, selectedCardFid = null;
+    const DBX_APP_KEY = 'r8nisc7hr8cta77';
+
+    window.onload = () => {
+        initDropbox();
+        initShortcuts();
+        renderSidebar();
+        document.getElementById('cardInput').addEventListener('input', e => {
+            document.getElementById('charCount').innerText = `${e.target.value.length} CHARS`;
+        });
+    };
+
+    function initShortcuts() {
+        document.addEventListener('keydown', e => {
+            const cmdShift = e.metaKey && e.shiftKey;
+            if (cmdShift && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
+            if (cmdShift && e.key === '2') { e.preventDefault(); setMode('Idea'); }
+            if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
+        });
+    }
+
+    function setMode(t) {
+        document.getElementById('editorMode').firstElementChild.innerText = `${t} MODE`;
+        const input = document.getElementById('cardInput');
+        if (!input.value.includes(`-${t}`)) input.value = `-${t} ` + input.value;
+        input.focus();
+    }
+
+    function saveCard() {
+        const input = document.getElementById('cardInput');
+        const text = input.value.trim();
+        if (!text) return;
+
+        const id = Math.random().toString(36).substr(2, 4).toUpperCase();
+        const tags = (text.match(/-[^\s]+/g) || []).map(t => t.substring(1));
+        
+        cards.unshift({ id, fullId: Date.now(), content: text, tags, time: Date.now(), status: 'new' });
+        input.value = "";
+        saveAndRefresh();
+    }
+
+    function renderSidebar() {
+        const term = document.getElementById('searchInput').value.toLowerCase();
+        const container = document.getElementById('cardSidebar');
+        const now = Date.now();
+
+        container.innerHTML = cards.filter(c => c.content.toLowerCase().includes(term)).map(c => {
+            const isOld = (now - c.time) > (24 * 60 * 60 * 1000) && c.status === 'new';
+            const isActive = selectedCardFid == c.fullId;
+            const tagMark = c.tags.includes('摘錄') ? '■' : (c.tags.includes('Idea') ? '□' : '');
+
+            return `
+                <div class="list-card p-4 ${isActive ? 'active' : ''}" onclick="selectCard('${c.fullId}')">
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="mono text-[9px] font-bold opacity-60">${c.id}</span>
+                        <span class="text-[9px]">${tagMark} ${isOld ? '<span class="revisit-blink text-red-500">⚡️</span>' : ''}</span>
+                    </div>
+                    <div class="text-[11px] font-bold line-clamp-2 leading-snug">${c.content.replace(/-[^\s]+|#[^\s]+/g, '').substring(0, 50)}</div>
+                    <div class="text-[8px] mt-2 opacity-40">${new Date(c.time).toLocaleDateString()}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function selectCard(fid) {
+        selectedCardFid = fid;
+        const card = cards.find(c => c.fullId == fid);
+        document.getElementById('revisitTool').classList.remove('hidden');
+        document.getElementById('selectedId').innerText = card.id;
+        renderSidebar();
+    }
+
+    function actionLink() {
+        const card = cards.find(c => c.fullId == selectedCardFid);
+        const input = document.getElementById('cardInput');
+        input.value = `[[${card.id}]] ` + input.value;
+        input.focus();
+        // 標記為已處理
+        card.status = 'processed';
+        saveAndRefresh();
+    }
+
+    function actionArchive() {
+        const card = cards.find(c => c.fullId == selectedCardFid);
+        card.status = 'archived';
+        selectedCardFid = null;
+        document.getElementById('revisitTool').classList.add('hidden');
+        saveAndRefresh();
+    }
+
+    function deleteCard() {
+        if(confirm('確定刪除？')) {
+            cards = cards.filter(c => c.fullId != selectedCardFid);
+            selectedCardFid = null;
+            document.getElementById('revisitTool').classList.add('hidden');
             saveAndRefresh();
         }
+    }
 
-        function toggleView(showBoard) {
-            document.getElementById('boardSection').classList.toggle('hidden', !showBoard);
-            if (showBoard) renderCards();
-        }
+    function saveAndRefresh() {
+        localStorage.setItem('zet_cards', JSON.stringify(cards));
+        renderSidebar();
+        if (dbx) uploadToCloud();
+    }
 
-        function updateRevisitAlert() {
-            const count = cards.filter(c => (Date.now() - c.time) > (24 * 60 * 60 * 1000) && c.status === 'new').length;
-            const el = document.getElementById('revisitCount');
-            if (count > 0) {
-                el.innerText = `${count} 張需復閱`;
-                el.classList.remove('hidden');
-            } else {
-                el.classList.add('hidden');
-            }
-        }
+    function exportJSON() {
+        const blob = new Blob([JSON.stringify(cards, null, 2)], {type : 'application/json'});
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `ZettelSync_${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+    }
 
-        function saveAndRefresh() {
-            localStorage.setItem('zet_cards', JSON.stringify(cards));
-            renderCards();
-            updateRevisitAlert();
+    function initDropbox() {
+        const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
+        if (token) {
+            dbx = new Dropbox.Dropbox({ accessToken: token });
+            document.getElementById('statusDot').classList.add('bg-black');
         }
-
-        function initDropbox() {
-            const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
-            if (token) {
-                dbx = new Dropbox.Dropbox({ accessToken: token });
-                document.getElementById('statusDot').classList.add('bg-black');
-            }
-        }
-        function authDropbox() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DBX_APP_KEY}&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`; }
-        function jumpTo(id) { const c = cards.find(x => x.id === id); if(c) { document.getElementById('searchInput').value = id; renderCards(); } }
-    </script>
+    }
+    function authDropbox() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DBX_APP_KEY}&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`; }
+</script>
 </body>
 </html>
