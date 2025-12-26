@@ -2,294 +2,244 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>ZettelSync | Ultimate Indexer</title>
+    <title>ZettelStudio | Pro Writer Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #fafafa; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
-        .sidebar-hidden { width: 0 !important; opacity: 0; pointer-events: none; border: none !important; }
-        .transition-custom { transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
-        .idx-item { border-bottom: 2px solid #000; cursor: pointer; padding: 10px 16px; transition: 0.2s; font-size: 11px; font-weight: 700; background: #fff; }
-        .idx-item:hover { background: #000; color: #fff; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        /* 看板卡片樣式 */
-        .board-card { border: 4px solid #000; padding: 1.5rem; background: #fff; shadow: 8px 8px 0 #000; transition: 0.3s; }
-        .board-card:hover { transform: translate(-4px, -4px); box-shadow: 12px 12px 0 #000; }
+        .transition-fast { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .idx-item { border-bottom: 2px solid #000; cursor: pointer; padding: 10px 15px; font-size: 11px; font-weight: 700; background: #fff; }
+        .idx-item:hover { background: #000; color: #fff; }
+        .board-card { border: 3px solid #000; padding: 1rem; background: #fff; box-shadow: 4px 4px 0 #000; }
+        /* 收縮動畫 */
+        .w-collapsed { width: 0 !important; opacity: 0; pointer-events: none; }
     </style>
 </head>
-<body class="flex flex-col">
+<body class="flex flex-col h-screen">
 
-    <header class="h-14 flex items-center justify-between px-6 bg-white border-b-4 border-black z-[100]">
+    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100]">
         <div class="flex items-center gap-6">
-            <h1 class="text-lg font-900 uppercase tracking-tighter">ZettelStudio</h1>
-            <div class="hidden md:flex gap-4 text-[10px] font-black opacity-30 uppercase">
-                <span>Ctrl+1: 摘錄 | Ctrl+2: Idea | Ctrl+B: 看板 | Ctrl+J: 工坊</span>
+            <h1 class="text-lg font-900 uppercase tracking-tighter">ZettelStudio <span class="text-[10px] opacity-25">Pro</span></h1>
+            <div class="flex border-2 border-black divide-x-2 divide-black">
+                <button onclick="switchMidView('editor')" class="px-3 py-1 text-[10px] font-black hover:bg-yellow-400">INPUT</button>
+                <button onclick="switchMidView('board')" class="px-3 py-1 text-[10px] font-black hover:bg-yellow-400">BOARD</button>
             </div>
         </div>
-        <div class="flex gap-4">
-            <button onclick="toggleBoard(true)" class="text-[10px] font-black border-2 border-black px-3 py-1 hover:bg-black hover:text-white transition">ARCHIVE BOARD</button>
-            <button onclick="toggleStudio()" class="text-[10px] font-black bg-black text-white px-3 py-1 hover:bg-zinc-800">STUDIO MODE</button>
+        <div class="flex gap-3">
+            <div id="syncIndicator" class="w-3 h-3 rounded-full border-2 border-black"></div>
+            <button onclick="authDropbox()" class="text-[10px] font-black underline">SYNC DBX</button>
+            <button onclick="toggleStudio()" class="bg-black text-white text-[10px] font-black px-4 py-1">TOGGLE STUDIO</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         
-        <aside id="libSide" class="sidebar-hidden w-72 border-r-4 border-black bg-zinc-50 transition-custom flex flex-col">
-            <div class="p-4 bg-black text-white text-[10px] font-black uppercase tracking-widest flex justify-between">
-                <span>Vault Index</span>
-                <span id="totalCount" class="opacity-50">0</span>
+        <aside class="w-64 border-r-4 border-black bg-zinc-50 flex flex-col shrink-0">
+            <div class="p-3 bg-black text-white text-[9px] font-black uppercase tracking-widest flex justify-between">
+                <span>Vault Index</span><span id="totalNum">0</span>
             </div>
-            
             <div class="flex-1 overflow-y-auto no-scrollbar">
-                <div class="p-3 bg-zinc-200 text-[9px] font-black uppercase border-b-2 border-black">Main Boxes</div>
-                <div class="idx-item flex justify-between items-center" onclick="filterByMode('摘錄')">
-                    <span>摘錄盒 (Quotes)</span><span id="count-quote" class="mono opacity-40">0</span>
-                </div>
-                <div class="idx-item flex justify-between items-center" onclick="filterByMode('Idea')">
-                    <span>Idea 盒 (Thoughts)</span><span id="count-idea" class="mono opacity-40">0</span>
-                </div>
-
-                <div class="p-3 bg-zinc-200 text-[9px] font-black uppercase border-b-2 border-black mt-4">Keywords Index</div>
-                <div id="tagIndex"></div>
-
-                <div class="p-3 bg-zinc-200 text-[9px] font-black uppercase border-b-2 border-black mt-4">Timeline Archive</div>
-                <div id="timeIndex"></div>
+                <div class="p-2 bg-zinc-200 text-[8px] font-black uppercase border-b-2 border-black">Categories</div>
+                <div class="idx-item flex justify-between" onclick="loadBoard('摘錄')"><span>摘錄盒</span><span id="c-q">0</span></div>
+                <div class="idx-item flex justify-between" onclick="loadBoard('Idea')"><span>Idea 盒</span><span id="c-i">0</span></div>
+                <div class="p-2 bg-zinc-200 text-[8px] font-black uppercase border-b-2 border-black mt-2">Keywords</div>
+                <div id="tagBox"></div>
+                <div class="p-2 bg-zinc-200 text-[8px] font-black uppercase border-b-2 border-black mt-2">Timeline</div>
+                <div id="timeBox"></div>
             </div>
         </aside>
 
-        <main class="flex-1 flex flex-col items-center pt-20 bg-zinc-100 overflow-y-auto px-6 relative">
-            <div class="max-w-2xl w-full">
-                <div class="bg-white border-4 border-black p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
-                    <div class="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
-                        <span id="activeId" class="mono font-black text-2xl text-zinc-300">#NEW</span>
-                        <div id="modeBadge" class="hidden bg-black text-white px-3 py-1 text-[10px] font-black uppercase animate-pulse"></div>
+        <main id="midSection" class="flex-1 flex flex-col bg-zinc-100 border-r-4 border-black overflow-hidden transition-fast">
+            <div id="midEditor" class="flex-1 flex flex-col items-center pt-20 px-10 hidden">
+                <div class="max-w-xl w-full bg-white border-4 border-black p-8 shadow-[10px_10px_0_0_#000]">
+                    <div class="flex justify-between items-center mb-4 border-b-2 border-black pb-2">
+                        <span id="activeId" class="mono font-black text-xl text-zinc-300">#NEW</span>
+                        <div id="curMode" class="text-[10px] font-black bg-black text-white px-2">NONE</div>
                     </div>
-                    <textarea id="mainEditor" class="w-full h-80 text-xl outline-none leading-relaxed resize-none bg-transparent" placeholder="輸入新的思考..."></textarea>
-                    <div class="mt-6 flex justify-between items-center">
-                        <button onclick="saveCard()" class="bg-black text-white px-10 py-3 text-xs font-900 uppercase tracking-widest hover:invert transition">File to Vault</button>
-                        <div class="text-[10px] font-black opacity-20 uppercase">Ctrl+S to save</div>
-                    </div>
+                    <textarea id="mainIn" class="w-full h-64 text-lg outline-none leading-relaxed bg-transparent resize-none" placeholder="寫入原子思考..."></textarea>
+                    <button onclick="saveCard()" class="mt-4 w-full bg-black text-white py-3 font-900 text-xs uppercase tracking-widest">File to Vault</button>
                 </div>
+            </div>
+
+            <div id="midBoard" class="flex-1 flex flex-col p-6 overflow-hidden">
+                <div class="flex justify-between items-center mb-6 border-b-2 border-black pb-2">
+                    <h2 id="boardTitle" class="text-sm font-900 uppercase">Board: All Archive</h2>
+                    <button onclick="switchMidView('editor')" class="text-[9px] font-black underline">BACK TO INPUT</button>
+                </div>
+                <div id="boardGrid" class="flex-1 overflow-y-auto grid grid-cols-1 gap-4 no-scrollbar pb-20">
+                    </div>
             </div>
         </main>
 
-        <aside id="studioSide" class="sidebar-hidden w-[500px] border-l-4 border-black bg-white transition-custom flex flex-col">
-            <div class="p-4 border-b-2 border-black flex justify-between bg-zinc-50 items-center">
-                <h3 class="text-xs font-black uppercase">Project Studio</h3>
-                <button onclick="exportProject()" class="text-[9px] font-black bg-black text-white px-3 py-1">EXPORT MD</button>
+        <aside id="studioSide" class="w-[500px] bg-white flex flex-col transition-fast overflow-hidden">
+            <div class="p-4 border-b-4 border-black bg-zinc-50 flex flex-col gap-3">
+                <div class="flex justify-between items-center">
+                    <input id="projName" class="bg-transparent font-900 uppercase text-sm outline-none border-b-2 border-transparent focus:border-black" value="未命名項目">
+                    <select id="projType" class="text-[10px] font-black border-2 border-black px-1 outline-none">
+                        <option value="論文">PAPER</option>
+                        <option value="小說">NOVEL</option>
+                        <option value="劇本">SCRIPT</option>
+                    </select>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-[9px] font-black opacity-30 uppercase">Writing Studio</span>
+                    <button onclick="exportDoc()" class="text-[9px] font-black bg-black text-white px-2 py-1">EXPORT MD</button>
+                </div>
             </div>
-            <div id="studioArea" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-4 bg-white">
-                <div id="projectPlaceholder" class="text-center py-20 opacity-20 text-[10px] font-black uppercase">從看板或左側 PUSH 內容來串聯</div>
-                <div id="projectBlocks" class="space-y-4"></div>
+            <div id="studioCanvas" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-4">
+                <div id="segments" class="space-y-6"></div>
             </div>
         </aside>
-    </div>
 
-    <div id="boardLayer" class="hidden fixed inset-0 bg-white z-[200] p-12 overflow-y-auto">
-        <div class="flex justify-between items-center mb-10 border-b-4 border-black pb-4">
-            <h2 id="boardTitle" class="text-3xl font-900 uppercase italic">Repository</h2>
-            <div class="flex gap-4 items-center">
-                <div id="connTip" class="hidden text-xs bg-yellow-400 px-3 py-1 font-black border-2 border-black">選擇第二張卡片建立連結...</div>
-                <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-6 py-2 hover:bg-black hover:text-white transition">CLOSE</button>
-            </div>
-        </div>
-        <div id="boardContent" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10"></div>
     </div>
 
 <script>
-    let cards = JSON.parse(localStorage.getItem('zet_v14')) || [];
-    let currentMode = null;
-    let projectSegments = [];
-    let connectSourceId = null;
+    let cards = JSON.parse(localStorage.getItem('Z_Cards')) || [];
+    let segments = [];
+    let dbx;
 
     window.onload = () => {
-        renderSidebar();
+        updateStats();
+        switchMidView('board');
         initShortcuts();
+        initDropbox();
     };
 
     function initShortcuts() {
         document.addEventListener('keydown', e => {
             const ctrl = e.ctrlKey || e.metaKey;
-            if (ctrl && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
-            if (ctrl && e.key === '2') { e.preventDefault(); setMode('Idea'); }
-            if (ctrl && e.key === 's') { e.preventDefault(); saveCard(); }
-            if (ctrl && e.key === 'b') { e.preventDefault(); toggleBoard(); }
+            if (ctrl && e.key === '1') { e.preventDefault(); setMode('摘錄'); switchMidView('editor'); }
+            if (ctrl && e.key === '2') { e.preventDefault(); setMode('Idea'); switchMidView('editor'); }
             if (ctrl && e.key === 'j') { e.preventDefault(); toggleStudio(); }
-            if (ctrl && e.key === 'n') { e.preventDefault(); resetEditor(); }
+            if (ctrl && e.key === 'b') { e.preventDefault(); switchMidView('board'); }
         });
     }
 
-    function setMode(m) {
-        currentMode = (currentMode === m) ? null : m;
-        const badge = document.getElementById('modeBadge');
-        if (currentMode) { 
-            badge.innerText = currentMode; 
-            badge.classList.remove('hidden'); 
-        } else { 
-            badge.classList.add('hidden'); 
-        }
-    }
-
-    function saveCard() {
-        const content = document.getElementById('mainEditor').value.trim();
-        if(!content) return;
-        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        cards.unshift({
-            id, fullId: Date.now(), content, mode: currentMode, time: Date.now(),
-            tags: (content.match(/#[^\s]+/g) || []).map(t => t.substring(1))
-        });
-        localStorage.setItem('zet_v14', JSON.stringify(cards));
-        resetEditor();
-        renderSidebar();
-    }
-
-    function resetEditor() {
-        document.getElementById('mainEditor').value = "";
-        setMode(null);
-    }
-
-    function renderSidebar() {
-        const counts = { '摘錄': 0, 'Idea': 0 };
-        const timeline = {};
-        const tags = {};
-        cards.forEach(c => {
-            if(c.mode) counts[c.mode]++;
-            const d = new Date(c.time);
-            const k = `${d.getFullYear()} - ${String(d.getMonth()+1).padStart(2,'0')}`;
-            timeline[k] = (timeline[k] || 0) + 1;
-            c.tags.forEach(t => tags[t] = (tags[t] || 0) + 1);
-        });
-
-        document.getElementById('totalCount').innerText = cards.length;
-        document.getElementById('count-quote').innerText = counts['摘錄'];
-        document.getElementById('count-idea').innerText = counts['Idea'];
-
-        // 渲染關鍵詞盒子
-        document.getElementById('tagIndex').innerHTML = Object.entries(tags)
-            .sort((a,b) => b[1] - a[1]) // 按頻率排序
-            .map(([k,v]) => `
-            <div class="idx-item flex justify-between items-center group" onclick="filterByTag('${k}')">
-                <span>#${k}</span><span class="opacity-30 group-hover:opacity-100">${v}</span>
-            </div>
-        `).join('');
-
-        // 渲染時間存檔
-        document.getElementById('timeIndex').innerHTML = Object.entries(timeline)
-            .sort((a,b) => b[0].localeCompare(a[0]))
-            .map(([k,v]) => `
-            <div class="idx-item flex justify-between items-center" onclick="filterByTime('${k}')">
-                <span>${k}</span><span class="opacity-30">${v}</span>
-            </div>
-        `).join('');
-    }
-
-    function toggleBoard(show) {
-        const layer = document.getElementById('boardLayer');
-        if(show === undefined) show = layer.classList.contains('hidden');
-        layer.classList.toggle('hidden', !show);
-        if(show) renderBoard(cards, "All Archive");
+    function switchMidView(view) {
+        document.getElementById('midEditor').classList.toggle('hidden', view !== 'editor');
+        document.getElementById('midBoard').classList.toggle('hidden', view !== 'board');
+        if(view === 'board') loadBoard();
     }
 
     function toggleStudio() {
-        document.getElementById('libSide').classList.toggle('sidebar-hidden');
-        document.getElementById('studioSide').classList.toggle('sidebar-hidden');
+        document.getElementById('studioSide').classList.toggle('w-collapsed');
     }
 
-    function renderBoard(data, title) {
-        document.getElementById('boardTitle').innerText = title;
-        document.getElementById('boardContent').innerHTML = data.map(c => `
-            <div id="board-card-${c.id}" class="board-card flex flex-col">
-                <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
-                    <span class="mono font-black text-xl">#${c.id}</span>
-                    <span class="text-[10px] font-black uppercase bg-black text-white px-2 py-0.5">${c.mode || 'Card'}</span>
+    function setMode(m) {
+        document.getElementById('curMode').innerText = m;
+    }
+
+    function saveCard() {
+        const content = document.getElementById('mainIn').value.trim();
+        if(!content) return;
+        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+        cards.unshift({
+            id, fullId: Date.now(), content, 
+            mode: document.getElementById('curMode').innerText, 
+            time: Date.now(),
+            tags: (content.match(/#[^\s]+/g) || []).map(t => t.substring(1))
+        });
+        localStorage.setItem('Z_Cards', JSON.stringify(cards));
+        document.getElementById('mainIn').value = "";
+        updateStats();
+        switchMidView('board');
+        backupToDropbox();
+    }
+
+    function updateStats() {
+        const q = cards.filter(c => c.mode === '摘錄').length;
+        const i = cards.filter(c => c.mode === 'Idea').length;
+        document.getElementById('totalNum').innerText = cards.length;
+        document.getElementById('c-q').innerText = q;
+        document.getElementById('c-i').innerText = i;
+
+        // 簡單時間與標籤渲染 (略)
+        const tags = {}; cards.forEach(c => c.tags.forEach(t => tags[t] = (tags[t]||0)+1));
+        document.getElementById('tagBox').innerHTML = Object.entries(tags).map(([k,v]) => `
+            <div class="idx-item flex justify-between" onclick="loadBoard('tag','${k}')"><span>#${k}</span><span class="opacity-30">${v}</span></div>
+        `).join('');
+    }
+
+    function loadBoard(type, val) {
+        let filtered = cards;
+        if(type === '摘錄' || type === 'Idea') filtered = cards.filter(c => c.mode === type);
+        if(type === 'tag') filtered = cards.filter(c => c.tags.includes(val));
+
+        document.getElementById('boardGrid').innerHTML = filtered.map(c => `
+            <div class="board-card group">
+                <div class="flex justify-between mb-2 border-b border-black pb-1">
+                    <span class="mono font-black text-xs">#${c.id}</span>
+                    <span class="text-[9px] font-black uppercase">${c.mode}</span>
                 </div>
-                <div class="text-lg font-medium leading-relaxed flex-1 prose prose-sm">${marked.parse(c.content)}</div>
-                <div class="mt-6 flex justify-between gap-2 pt-4 border-t border-zinc-100">
-                    <button onclick="pushToStudio('${c.id}')" class="flex-1 bg-blue-600 text-white text-[10px] py-2 font-black uppercase hover:bg-black transition">Push to Studio</button>
-                    <button onclick="startLink('${c.id}')" class="px-4 bg-zinc-100 text-[10px] font-black uppercase border-2 border-black hover:bg-yellow-400 transition">Link</button>
-                </div>
+                <div class="text-xs leading-relaxed mb-4">${marked.parse(c.content)}</div>
+                <button onclick="pushToStudio('${c.id}')" class="w-full bg-blue-600 text-white py-1 text-[9px] font-black uppercase hover:bg-black transition">Push to Studio</button>
             </div>
         `).join('');
     }
 
-    // 過濾功能
-    function filterByMode(m) { toggleBoard(true); renderBoard(cards.filter(c => c.mode === m), `${m} Box`); }
-    function filterByTag(t) { toggleBoard(true); renderBoard(cards.filter(c => c.tags.includes(t)), `Keyword: #${t}`); }
-    function filterByTime(k) { 
-        toggleBoard(true); 
-        renderBoard(cards.filter(c => {
-            const d = new Date(c.time);
-            return `${d.getFullYear()} - ${String(d.getMonth()+1).padStart(2,'0')}` === k;
-        }), `Archive: ${k}`); 
-    }
-
     function pushToStudio(id) {
-        const c = cards.find(x => x.id === id);
-        projectSegments.push({ type: 'card', id: id });
-        projectSegments.push({ type: 'text', content: '' }); // 自動加一個銜接區
+        segments.push({ type: 'card', id: id });
+        segments.push({ type: 'text', content: '' });
         renderStudio();
-        document.getElementById('projectPlaceholder').classList.add('hidden');
     }
 
     function renderStudio() {
-        const container = document.getElementById('projectBlocks');
-        container.innerHTML = projectSegments.map((seg, idx) => {
+        const area = document.getElementById('segments');
+        area.innerHTML = segments.map((seg, idx) => {
             if(seg.type === 'card') {
                 const c = cards.find(x => x.id === seg.id);
-                return `
-                    <div class="p-4 bg-zinc-50 border-l-4 border-blue-600 relative group">
-                        <div class="text-[9px] font-black opacity-30 mb-2">[[${c.id}]] REF</div>
-                        <div class="text-[11px] italic opacity-60 line-clamp-3">${c.content}</div>
-                        <button onclick="removeSeg(${idx})" class="absolute right-2 top-2 hidden group-hover:block text-red-500 font-black text-[10px]">REMOVE</button>
-                    </div>
-                `;
+                return `<div class="p-3 bg-zinc-50 border-l-4 border-blue-600 text-[11px] italic opacity-60 relative group">
+                    <div class="font-black mb-1 text-[8px] uppercase">[[${c.id}]] REF</div>
+                    ${c.content.substring(0,100)}...
+                    <button onclick="segments.splice(${idx},1);renderStudio();" class="absolute right-2 top-2 hidden group-hover:block text-red-500 font-black">X</button>
+                </div>`;
             } else {
-                return `
-                    <div class="py-2">
-                        <textarea oninput="projectSegments[${idx}].content=this.value" 
-                            class="w-full min-h-[120px] text-sm leading-relaxed outline-none border-b border-zinc-100 focus:border-black transition-all bg-transparent" 
-                            placeholder="在這裡寫下你的串聯想法...">${seg.content}</textarea>
-                    </div>
-                `;
+                return `<textarea oninput="segments[${idx}].content=this.value" 
+                    class="w-full min-h-[80px] text-sm leading-relaxed outline-none border-b border-zinc-100 py-2 focus:border-black transition-all bg-transparent" 
+                    placeholder="在此處寫下想法...">${seg.content}</textarea>`;
             }
         }).join('');
     }
 
-    function removeSeg(idx) { projectSegments.splice(idx, 1); renderStudio(); }
-
-    function startLink(id) {
-        if (!connectSourceId) {
-            connectSourceId = id;
-            document.getElementById(`board-card-${id}`).style.borderColor = "#ffeb3b";
-            document.getElementById('connTip').classList.remove('hidden');
-        } else {
-            const c1 = cards.find(c => c.id === connectSourceId);
-            const c2 = cards.find(c => c.id === id);
-            if(c1 && c2 && c1.id !== c2.id) {
-                c1.content += `\n\n[[${c2.id}]]`;
-                c2.content += `\n\n[[${c1.id}]]`;
-                localStorage.setItem('zet_v14', JSON.stringify(cards));
-                alert(`連結成功: #${c1.id} <-> #${c2.id}`);
-            }
-            connectSourceId = null;
-            document.getElementById('connTip').classList.add('hidden');
-            renderBoard(cards, "Archive");
-        }
-    }
-
-    function exportProject() {
-        let md = `# Project Export - ${new Date().toLocaleDateString()}\n\n`;
-        projectSegments.forEach(s => {
+    function exportDoc() {
+        const type = document.getElementById('projType').value;
+        const name = document.getElementById('projName').value;
+        let md = `# ${type}: ${name}\n\n`;
+        segments.forEach(s => {
             if(s.type === 'card') md += `\n> ${cards.find(x => x.id === s.id).content}\n\n`;
             else md += s.content + "\n";
         });
-        const blob = new Blob([md], {type: 'text/markdown'});
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = "Writing_Project.md";
+        a.href = URL.createObjectURL(new Blob([md]));
+        a.download = `${type}_${name}.md`;
         a.click();
+    }
+
+    // Dropbox 智能備份
+    async function backupToDropbox() {
+        if (!dbx) return;
+        const projData = { name: document.getElementById('projName').value, segments };
+        try {
+            await dbx.filesUpload({ path: '/Zettel_Cards_Backup.json', contents: JSON.stringify(cards), mode: 'overwrite' });
+            await dbx.filesUpload({ path: '/Zettel_Projects_Backup.json', contents: JSON.stringify(projData), mode: 'overwrite' });
+            document.getElementById('syncIndicator').classList.add('bg-green-500');
+        } catch(e) { console.error(e); }
+    }
+
+    function initDropbox() {
+        const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
+        if (token) {
+            dbx = new Dropbox.Dropbox({ accessToken: token });
+            document.getElementById('syncIndicator').classList.add('bg-green-500');
+            window.location.hash = "";
+        }
+    }
+    function authDropbox() {
+        window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=r8nisc7hr8cta77&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`;
     }
 </script>
 </body>
