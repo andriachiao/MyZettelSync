@@ -9,7 +9,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono&display=swap');
-        body { font-family: 'Inter', sans-serif; background-color: #ffffff; color: #000000; }
+        body { font-family: 'Inter', sans-serif; background-color: #ffffff; color: #000000; transition: background 0.3s; }
         
         /* 極簡索引卡 */
         .index-card {
@@ -22,53 +22,54 @@
         /* 摘錄與靈感的角落標記 */
         .corner-mark {
             position: absolute; top: 0; right: 0;
-            width: 12px; height: 12px;
+            width: 14px; height: 14px;
         }
         .mark-摘錄 { background-color: #000000; } /* 黑 */
         .mark-Idea { background-color: #d1d5db; } /* 灰 */
 
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        textarea { resize: none; }
+        textarea { resize: none; border: none !important; box-shadow: none !important; }
         
         /* 背景水印快捷鍵 */
         .bg-guide {
             position: fixed; bottom: 30px; left: 30px;
             font-family: 'JetBrains Mono', monospace;
-            font-size: 10px; color: #e5e7eb; pointer-events: none;
+            font-size: 10px; color: #f3f4f6; pointer-events: none;
+            letter-spacing: 0.05em;
         }
     </style>
 </head>
 <body class="h-screen flex flex-col items-center justify-center p-6 overflow-hidden">
 
     <div class="bg-guide">
-        ⌘⇧Q:摘錄 | ⌘⇧I:IDEA | ⌘⇧B:看板 | ⌘⇧F:搜尋 | ⌘⇧S:儲存 | ⌘⇧E:匯出
+        ⌘⇧1:摘錄 | ⌘⇧2:IDEA | ⌘⇧B:看板 | ⌘⇧S:儲存 | ⌘⇧F:搜尋 | ⌘⇧E:匯出
     </div>
 
-    <header class="fixed top-8 left-8 flex items-center gap-4">
-        <h1 class="text-sm font-900 tracking-tighter uppercase">MyZettelSync</h1>
-        <div id="status" class="w-2 h-2 rounded-full bg-zinc-100"></div>
+    <header class="fixed top-10 left-10 flex items-center gap-4">
+        <h1 class="text-sm font-900 tracking-tighter uppercase letter-widest">MyZettelSync</h1>
+        <div id="status" class="w-1.5 h-1.5 rounded-full bg-zinc-100 transition-colors duration-500"></div>
     </header>
 
-    <main id="mainEditor" class="w-full max-w-xl transition-all duration-500">
-        <div class="index-card rounded-lg overflow-hidden shadow-sm">
+    <main id="mainEditor" class="w-full max-w-xl">
+        <div class="index-card rounded overflow-hidden shadow-sm">
             <textarea id="cardInput" autofocus
-                class="w-full p-10 text-xl border-none focus:ring-0 outline-none leading-relaxed placeholder-zinc-200 min-h-[300px]"
+                class="w-full p-10 text-xl border-none focus:ring-0 outline-none leading-relaxed placeholder-zinc-200 min-h-[350px]"
                 placeholder="在此寫入你的思考..."></textarea>
-            <div class="px-10 py-4 border-t border-zinc-50 flex justify-between text-[10px] font-bold text-zinc-300">
+            <div class="px-10 py-5 border-t border-zinc-50 flex justify-between text-[9px] font-black text-zinc-300 uppercase tracking-widest">
                 <span id="modeDisplay">STANDARD MODE</span>
                 <span id="charCount">0 CHARS</span>
             </div>
         </div>
     </main>
 
-    <section id="boardView" class="hidden fixed inset-0 bg-white z-40 p-12 overflow-y-auto no-scrollbar">
+    <section id="boardView" class="hidden fixed inset-0 bg-white z-50 p-8 md:p-20 overflow-y-auto no-scrollbar">
         <div class="max-w-3xl mx-auto">
-            <div class="flex justify-between items-center mb-12 border-b-2 border-black pb-4">
-                <input type="text" id="searchInput" oninput="renderCards()" placeholder="SEARCH..." 
-                    class="bg-transparent outline-none font-900 text-2xl w-full">
-                <button onclick="toggleBoard()" class="text-xs font-black">CLOSE</button>
+            <div class="flex justify-between items-end mb-16 border-b border-zinc-100 pb-4">
+                <input type="text" id="searchInput" oninput="renderCards()" placeholder="SEARCH THROUGH INDEX..." 
+                    class="bg-transparent outline-none font-900 text-3xl w-full tracking-tighter">
+                <button onclick="toggleBoard(false)" class="text-[10px] font-black hover:underline px-4">CLOSE</button>
             </div>
-            <div id="cardList" class="grid grid-cols-1 gap-6 pb-20"></div>
+            <div id="cardList" class="grid grid-cols-1 gap-10 pb-40"></div>
         </div>
     </section>
 
@@ -89,12 +90,16 @@
             document.addEventListener('keydown', e => {
                 const cmdShift = e.metaKey && e.shiftKey;
                 
-                if (cmdShift && e.key === 'q') { e.preventDefault(); setType('摘錄'); }
-                if (cmdShift && e.key === 'i') { e.preventDefault(); setType('Idea'); }
+                // 模式設定
+                if (cmdShift && e.key === '1') { e.preventDefault(); setType('摘錄'); }
+                if (cmdShift && e.key === '2') { e.preventDefault(); setType('Idea'); }
+                
+                // 功能操作
                 if (cmdShift && e.key === 'b') { e.preventDefault(); toggleBoard(); }
-                if (cmdShift && e.key === 'f') { e.preventDefault(); toggleBoard(); document.getElementById('searchInput').focus(); }
+                if (cmdShift && e.key === 'f') { e.preventDefault(); toggleBoard(true); document.getElementById('searchInput').focus(); }
                 if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
                 if (cmdShift && e.key === 'e') { e.preventDefault(); exportJSON(); }
+                
                 if (e.key === 'Escape') toggleBoard(false);
             });
         }
@@ -102,7 +107,9 @@
         function setType(t) {
             const input = document.getElementById('cardInput');
             document.getElementById('modeDisplay').innerText = `${t.toUpperCase()} MODE`;
-            if (!input.value.includes(`-${t}`)) input.value = `-${t} ` + input.value;
+            // 清除現有類型標籤重新插入
+            let val = input.value.replace(/-摘錄|-Idea/g, '').trim();
+            input.value = `-${t} ` + val;
             input.focus();
         }
 
@@ -118,9 +125,8 @@
             cards.unshift({ id, fullId: Date.now(), content: text, tags, keywords: kws, time: Date.now() });
             localStorage.setItem('zet_cards', JSON.stringify(cards));
             
-            // 儲存後重置
             input.value = "";
-            document.getElementById('modeDisplay').innerText = "SAVED";
+            document.getElementById('modeDisplay').innerText = "CARD FILED";
             setTimeout(() => document.getElementById('modeDisplay').innerText = "STANDARD MODE", 2000);
             if (dbx) uploadToCloud();
         }
@@ -131,28 +137,33 @@
             const filtered = cards.filter(c => c.content.toLowerCase().includes(term));
 
             list.innerHTML = filtered.map(c => {
-                const typeClass = c.tags.includes('摘錄') ? 'mark-摘錄' : (c.tags.includes('Idea') ? 'mark-Idea' : '');
+                const isQuote = c.tags.includes('摘錄');
+                const isIdea = c.tags.includes('Idea');
+                const markClass = isQuote ? 'mark-摘錄' : (isIdea ? 'mark-Idea' : '');
+                
                 return `
-                    <div class="index-card p-8 rounded border border-zinc-100 hover:border-black transition-all">
-                        <div class="corner-mark ${typeClass}"></div>
-                        <div class="text-[9px] font-mono text-zinc-300 mb-4">${c.id} // ${new Date(c.time).toLocaleDateString()}</div>
-                        <div class="prose prose-sm">${marked.parse(c.content.replace(/-[^\s]+|#[^\s]+/g, ''))}</div>
-                        <div class="mt-4 flex gap-2">
-                            ${c.keywords.map(k => `<span class="text-[9px] font-black uppercase">#${k}</span>`).join('')}
+                    <div class="index-card p-10 rounded border border-zinc-100">
+                        <div class="corner-mark ${markClass}"></div>
+                        <div class="text-[9px] font-mono text-zinc-300 mb-6 tracking-widest uppercase">${c.id} // ${new Date(c.time).toLocaleDateString()}</div>
+                        <div class="prose prose-sm text-zinc-800 leading-relaxed">${marked.parse(c.content.replace(/-[^\s]+|#[^\s]+/g, ''))}</div>
+                        <div class="mt-8 flex flex-wrap gap-3">
+                            ${c.keywords.map(k => `<span class="text-[9px] font-black uppercase border-b border-black">#${k}</span>`).join('')}
                         </div>
                     </div>
                 `;
             }).join('');
         }
 
-        function toggleBoard(force) {
+        function toggleBoard(forceOpen) {
             const board = document.getElementById('boardView');
-            const isHidden = force !== undefined ? !force : board.classList.contains('hidden');
-            if (isHidden) {
+            if (forceOpen === true) {
                 board.classList.remove('hidden');
                 renderCards();
-            } else {
+            } else if (forceOpen === false) {
                 board.classList.add('hidden');
+            } else {
+                board.classList.toggle('hidden');
+                if (!board.classList.contains('hidden')) renderCards();
             }
         }
 
@@ -160,7 +171,7 @@
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(cards));
             const dlAnchorElem = document.createElement('a');
             dlAnchorElem.setAttribute("href", dataStr);
-            dlAnchorElem.setAttribute("download", "my_zettel_sync.json");
+            dlAnchorElem.setAttribute("download", `ZettelSync_Backup_${new Date().toISOString().slice(0,10)}.json`);
             dlAnchorElem.click();
         }
 
