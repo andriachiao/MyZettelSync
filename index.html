@@ -2,215 +2,255 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyZettelSync | 側邊卡片盒版</title>
+    <title>MyZettelSync | 邏輯架構版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;900&family=JetBrains+Mono:wght@500&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #ffffff; color: #000000; height: 100vh; overflow: hidden; }
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Inter:wght@400;900&display=swap');
+        body { font-family: 'Inter', sans-serif; background: #fff; color: #000; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
-        
-        /* 極簡邊框與滾動條 */
-        .border-main { border: 2px solid #000000; }
-        .border-r-main { border-right: 2px solid #000000; }
+        .border-k { border: 2px solid #000; }
+        .wiki-link { border-bottom: 2px solid #000; font-weight: 900; cursor: pointer; }
+        .wiki-link:hover { background: #000; color: #fff; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        
-        /* 卡片縮圖樣式 */
-        .list-card { border-bottom: 1px solid #000000; transition: all 0.2s; cursor: pointer; }
-        .list-card:hover { background: #f4f4f5; }
-        .list-card.active { background: #000000; color: #ffffff; }
-
-        /* 內容區塊 */
-        .wiki-link { font-weight: 900; text-decoration: underline; cursor: pointer; }
-        
-        /* 標記 */
-        .revisit-blink { animation: blink 1s infinite; }
-        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        .active-card { background: #000 !important; color: #fff !important; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.2; } 100% { opacity: 1; } }
+        .revisit-now { animation: pulse 1.5s infinite; color: #ff0000; }
     </style>
 </head>
 <body class="flex flex-col">
 
-    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 shrink-0 bg-white">
-        <h1 class="text-lg font-900 tracking-tighter uppercase">MyZettelSync</h1>
-        <div class="flex gap-4 items-center">
-            <button onclick="exportJSON()" class="text-[10px] font-black border-2 border-black px-2 py-0.5 uppercase">Export</button>
-            <div id="statusDot" class="w-3 h-3 border-2 border-black rounded-full"></div>
+    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 shrink-0 bg-white z-50">
+        <div class="flex items-center gap-6">
+            <h1 class="text-lg font-900 tracking-tighter">MyZettelSync</h1>
+            <div id="tagStats" class="flex gap-3 overflow-x-auto no-scrollbar max-w-md"></div>
+        </div>
+        <div class="flex gap-4">
+            <button onclick="openSettings()" class="mono text-[10px] font-black border-2 border-black px-2">SET REVISIT</button>
+            <div id="syncStatus" class="w-3 h-3 border-2 border-black rounded-full"></div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        
-        <aside class="w-72 border-r-4 border-black flex flex-col shrink-0 bg-white">
-            <div class="p-4 border-b-2 border-black">
-                <input type="text" id="searchInput" oninput="renderSidebar()" placeholder="搜尋關鍵字..." 
-                    class="w-full text-xs font-black outline-none uppercase placeholder-zinc-300">
+        <aside class="w-80 border-r-4 border-black flex flex-col shrink-0">
+            <div class="p-4 border-b-2 border-black flex gap-2">
+                <input type="text" id="searchInput" oninput="renderSidebar()" placeholder="FIND..." class="w-full text-xs font-black outline-none uppercase">
+                <button onclick="toggleBoard()" class="btn-k px-2 text-[10px] border-2 border-black font-black">BOARD</button>
             </div>
-            <div id="cardSidebar" class="flex-1 overflow-y-auto no-scrollbar">
-                </div>
+            <div id="cardSidebar" class="flex-1 overflow-y-auto no-scrollbar"></div>
         </aside>
 
-        <main class="flex-1 flex flex-col p-8 bg-zinc-50 overflow-y-auto no-scrollbar">
-            <div class="max-w-2xl w-full mx-auto space-y-8">
-                
-                <div class="bg-white border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] relative">
-                    <div id="editorMode" class="text-[10px] font-black uppercase mb-4 border-b-2 border-black pb-2 flex justify-between">
-                        <span>New Thought</span>
-                        <span id="charCount">0 Chars</span>
+        <main class="flex-1 flex flex-col p-10 bg-[#fafafa] overflow-y-auto no-scrollbar">
+            <div class="max-w-3xl w-full mx-auto space-y-8">
+                <div class="bg-white border-4 border-black p-8 shadow-[12px_12px_0px_0px_rgba(0,0,0,1)]">
+                    <div class="flex justify-between border-b-2 border-black mb-6 pb-2">
+                        <span id="cardIdDisplay" class="mono font-black text-sm text-zinc-400">#NEW_ENTRY</span>
+                        <span id="modeDisplay" class="text-[10px] font-black uppercase">Standard</span>
                     </div>
-                    <textarea id="cardInput" class="w-full h-64 text-xl outline-none leading-relaxed placeholder-zinc-200" 
-                        placeholder="在此寫入... 使用 #標籤 或 [[連結]]"></textarea>
-                    
-                    <div class="mt-6 flex justify-between items-center">
-                        <div class="flex gap-2 font-black text-[9px] text-zinc-400">
-                            <span>⌘⇧1:摘錄</span> <span>⌘⇧2:IDEA</span> <span>⌘⇧S:儲存</span>
-                        </div>
-                        <button onclick="saveCard()" class="bg-black text-white px-6 py-2 font-black text-xs uppercase">File Card</button>
+                    <textarea id="cardInput" class="w-full h-80 text-2xl outline-none leading-relaxed placeholder-zinc-200 bg-transparent" placeholder="輸入內容... [[ID]] 建立連結"></textarea>
+                    <div class="mt-8 flex justify-between items-center border-t-2 border-black pt-6">
+                        <span class="mono text-[10px] font-bold text-zinc-400">⌘⇧1:QUOTE | ⌘⇧2:IDEA | ⌘⇧S:SAVE</span>
+                        <button onclick="saveCard()" class="bg-black text-white px-8 py-3 font-900 text-xs uppercase hover:invert transition">Save to Box</button>
                     </div>
                 </div>
 
-                <div id="revisitTool" class="hidden bg-white border-2 border-black p-6 space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-[10px] font-black uppercase">處理選中卡片: <span id="selectedId"></span></span>
-                        <button onclick="deleteCard()" class="text-red-500 font-black text-[10px] uppercase">Delete</button>
+                <div id="linkGraph" class="hidden grid grid-cols-2 gap-4">
+                    <div class="border-2 border-black p-4 bg-white">
+                        <p class="text-[9px] font-black uppercase mb-3">Outgoing Links (連向)</p>
+                        <div id="outgoingList" class="space-y-2"></div>
                     </div>
-                    <div class="flex gap-2">
-                        <button onclick="actionLink()" class="flex-1 border-2 border-black py-2 font-black text-[10px] uppercase hover:bg-black hover:text-white transition">發展連結</button>
-                        <button onclick="actionArchive()" class="flex-1 border-2 border-zinc-200 py-2 font-black text-[10px] text-zinc-400 uppercase hover:border-black hover:text-black transition">歸檔</button>
+                    <div class="border-2 border-black p-4 bg-white">
+                        <p class="text-[9px] font-black uppercase mb-3">Backlinks (被引用)</p>
+                        <div id="backlinkList" class="space-y-2"></div>
                     </div>
                 </div>
             </div>
         </main>
     </div>
 
-    <div class="fixed bottom-4 right-6 text-[9px] font-black text-zinc-200 pointer-events-none uppercase">
-        ⌘⇧1:Quote | ⌘⇧2:Idea | ⌘⇧S:Save | ⌘⇧B:Toggle List
+    <div id="boardOverlay" class="hidden fixed inset-0 bg-white z-[100] p-10 overflow-y-auto">
+        <div class="flex justify-between border-b-4 border-black mb-10 pb-4">
+            <h2 class="text-4xl font-900">KNOWLEDGE BOARD</h2>
+            <button onclick="toggleBoard()" class="font-black">CLOSE [ESC]</button>
+        </div>
+        <div id="boardGrid" class="columns-1 md:columns-3 gap-8 space-y-8"></div>
     </div>
 
 <script>
-    let cards = JSON.parse(localStorage.getItem('zet_cards')) || [];
-    let dbx, selectedCardFid = null;
-    const DBX_APP_KEY = 'r8nisc7hr8cta77';
+    let cards = JSON.parse(localStorage.getItem('zet_v3')) || [];
+    let revisitDays = localStorage.getItem('revisit_days') || 1;
+    let editingFid = null;
 
     window.onload = () => {
-        initDropbox();
-        initShortcuts();
         renderSidebar();
-        document.getElementById('cardInput').addEventListener('input', e => {
-            document.getElementById('charCount').innerText = `${e.target.value.length} CHARS`;
-        });
+        renderStats();
+        initShortcuts();
     };
 
     function initShortcuts() {
         document.addEventListener('keydown', e => {
             const cmdShift = e.metaKey && e.shiftKey;
-            if (cmdShift && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
-            if (cmdShift && e.key === '2') { e.preventDefault(); setMode('Idea'); }
+            if (cmdShift && e.key === '1') { e.preventDefault(); insertPrefix('-摘錄'); }
+            if (cmdShift && e.key === '2') { e.preventDefault(); insertPrefix('-Idea'); }
             if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
+            if (cmdShift && e.key === 'b') { e.preventDefault(); toggleBoard(); }
+            if (cmdShift && e.key === 'f') { e.preventDefault(); document.getElementById('searchInput').focus(); }
+            if (e.key === 'Escape') { toggleBoard(false); }
         });
     }
 
-    function setMode(t) {
-        document.getElementById('editorMode').firstElementChild.innerText = `${t} MODE`;
-        const input = document.getElementById('cardInput');
-        if (!input.value.includes(`-${t}`)) input.value = `-${t} ` + input.value;
-        input.focus();
+    function insertPrefix(p) {
+        const el = document.getElementById('cardInput');
+        el.value = p + " " + el.value;
+        document.getElementById('modeDisplay').innerText = p.substring(1);
     }
 
     function saveCard() {
-        const input = document.getElementById('cardInput');
-        const text = input.value.trim();
-        if (!text) return;
+        const content = document.getElementById('cardInput').value.trim();
+        if (!content) return;
 
-        const id = Math.random().toString(36).substr(2, 4).toUpperCase();
-        const tags = (text.match(/-[^\s]+/g) || []).map(t => t.substring(1));
+        // 基於時間戳生成 16 進制 ID (例如：18F2)
+        const timestamp = Math.floor(Date.now() / 1000);
+        const shortId = (timestamp % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
         
-        cards.unshift({ id, fullId: Date.now(), content: text, tags, time: Date.now(), status: 'new' });
-        input.value = "";
-        saveAndRefresh();
+        const tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
+        
+        const newCard = {
+            id: shortId,
+            fullId: Date.now(),
+            content: content,
+            tags: tags,
+            time: Date.now(),
+            status: 'new'
+        };
+
+        cards.unshift(newCard);
+        localStorage.setItem('zet_v3', JSON.stringify(cards));
+        document.getElementById('cardInput').value = "";
+        renderSidebar();
+        renderStats();
     }
 
     function renderSidebar() {
-        const term = document.getElementById('searchInput').value.toLowerCase();
         const container = document.getElementById('cardSidebar');
+        const term = document.getElementById('searchInput').value.toLowerCase();
         const now = Date.now();
 
         container.innerHTML = cards.filter(c => c.content.toLowerCase().includes(term)).map(c => {
-            const isOld = (now - c.time) > (24 * 60 * 60 * 1000) && c.status === 'new';
-            const isActive = selectedCardFid == c.fullId;
-            const tagMark = c.tags.includes('摘錄') ? '■' : (c.tags.includes('Idea') ? '□' : '');
-
+            const isOld = (now - c.time) > (revisitDays * 24 * 60 * 60 * 1000) && c.status !== 'archived';
             return `
-                <div class="list-card p-4 ${isActive ? 'active' : ''}" onclick="selectCard('${c.fullId}')">
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="mono text-[9px] font-bold opacity-60">${c.id}</span>
-                        <span class="text-[9px]">${tagMark} ${isOld ? '<span class="revisit-blink text-red-500">⚡️</span>' : ''}</span>
+                <div onclick="editCard('${c.fullId}')" class="p-5 border-b border-zinc-200 hover:bg-zinc-50 cursor-pointer transition">
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="mono font-black text-[10px] tracking-widest">#${c.id}</span>
+                        ${isOld ? '<span class="revisit-now font-black text-[10px]">REVISIT ⚡️</span>' : ''}
                     </div>
-                    <div class="text-[11px] font-bold line-clamp-2 leading-snug">${c.content.replace(/-[^\s]+|#[^\s]+/g, '').substring(0, 50)}</div>
-                    <div class="text-[8px] mt-2 opacity-40">${new Date(c.time).toLocaleDateString()}</div>
+                    <div class="text-xs font-bold line-clamp-2">${c.content.replace(/#[^\s]+|-摘錄|-Idea/g, '')}</div>
                 </div>
             `;
         }).join('');
     }
 
-    function selectCard(fid) {
-        selectedCardFid = fid;
+    function renderStats() {
+        const stats = {};
+        cards.forEach(c => c.tags.forEach(t => stats[t] = (stats[t] || 0) + 1));
+        document.getElementById('tagStats').innerHTML = Object.entries(stats).map(([t, count]) => `
+            <div class="shrink-0 bg-black text-white px-2 py-0.5 text-[10px] font-black uppercase">
+                #${t} <span class="opacity-50 ml-1">${count}</span>
+            </div>
+        `).join('');
+    }
+
+    function editCard(fid) {
         const card = cards.find(c => c.fullId == fid);
-        document.getElementById('revisitTool').classList.remove('hidden');
-        document.getElementById('selectedId').innerText = card.id;
-        renderSidebar();
+        document.getElementById('cardInput').value = card.content;
+        document.getElementById('cardIdDisplay').innerText = `#${card.id}`;
+        showLinks(card);
     }
 
-    function actionLink() {
-        const card = cards.find(c => c.fullId == selectedCardFid);
-        const input = document.getElementById('cardInput');
-        input.value = `[[${card.id}]] ` + input.value;
-        input.focus();
-        // 標記為已處理
-        card.status = 'processed';
-        saveAndRefresh();
+    // 連結體現核心：解析 [[ID]] 並查找反向引用
+    function showLinks(currentCard) {
+        const linkArea = document.getElementById('linkGraph');
+        const outList = document.getElementById('outgoingList');
+        const backList = document.getElementById('backlinkList');
+        
+        linkArea.classList.remove('hidden');
+
+        // 正向連結：我引用了誰
+        const outgoingIds = (currentCard.content.match(/\[\[([A-Z0-9]{4})\]\]/g) || []).map(m => m.slice(2, -2));
+        outList.innerHTML = outgoingIds.map(id => {
+            const target = cards.find(c => c.id === id);
+            return `<div onclick="jumpTo('${id}')" class="wiki-link text-[10px] p-1 uppercase">${id} ${target?target.content.substring(0,15)+'...':'(不存在)'}</div>`;
+        }).join('') || '<span class="text-[9px] opacity-30">無正向連結</span>';
+
+        // 反向連結：誰引用了我
+        const backlinks = cards.filter(c => c.content.includes(`[[${currentCard.id}]]`));
+        backList.innerHTML = backlinks.map(c => `
+            <div onclick="editCard('${c.fullId}')" class="wiki-link text-[10px] p-1 uppercase">${c.id} ${c.content.substring(0,15)}...</div>
+        `).join('') || '<span class="text-[9px] opacity-30">尚未被引用</span>';
     }
 
-    function actionArchive() {
-        const card = cards.find(c => c.fullId == selectedCardFid);
-        card.status = 'archived';
-        selectedCardFid = null;
-        document.getElementById('revisitTool').classList.add('hidden');
-        saveAndRefresh();
-    }
-
-    function deleteCard() {
-        if(confirm('確定刪除？')) {
-            cards = cards.filter(c => c.fullId != selectedCardFid);
-            selectedCardFid = null;
-            document.getElementById('revisitTool').classList.add('hidden');
-            saveAndRefresh();
+    function toggleBoard(show) {
+        const overlay = document.getElementById('boardOverlay');
+        const isShow = show !== undefined ? show : overlay.classList.contains('hidden');
+        if(isShow) {
+            overlay.classList.remove('hidden');
+            renderBoard();
+        } else {
+            overlay.classList.add('hidden');
         }
     }
 
-    function saveAndRefresh() {
-        localStorage.setItem('zet_cards', JSON.stringify(cards));
+    function renderBoard() {
+        document.getElementById('boardGrid').innerHTML = cards.map(c => `
+            <div class="border-4 border-black p-6 bg-white inline-block w-full">
+                <div class="flex justify-between mb-4">
+                    <span class="mono font-black">#${c.id}</span>
+                    <button onclick="deleteCard('${c.fullId}')" class="hover:text-red-500">×</button>
+                </div>
+                <div class="text-sm font-bold">${marked.parse(c.content)}</div>
+                <div class="mt-4 flex gap-2">
+                    <button onclick="updateStatus('${c.fullId}', 'archived')" class="text-[9px] border border-black px-1 font-black">歸檔</button>
+                    <button onclick="developLink('${c.id}')" class="text-[9px] bg-black text-white px-1 font-black">發展連結</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function developLink(id) {
+        toggleBoard(false);
+        document.getElementById('cardInput').value = `[[${id}]] ` + document.getElementById('cardInput').value;
+        document.getElementById('cardInput').focus();
+    }
+
+    function updateStatus(fid, s) {
+        cards.find(c => c.fullId == fid).status = s;
+        localStorage.setItem('zet_v3', JSON.stringify(cards));
+        renderBoard();
         renderSidebar();
-        if (dbx) uploadToCloud();
     }
 
-    function exportJSON() {
-        const blob = new Blob([JSON.stringify(cards, null, 2)], {type : 'application/json'});
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = `ZettelSync_${new Date().toISOString().slice(0,10)}.json`;
-        a.click();
-    }
-
-    function initDropbox() {
-        const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
-        if (token) {
-            dbx = new Dropbox.Dropbox({ accessToken: token });
-            document.getElementById('statusDot').classList.add('bg-black');
+    function deleteCard(fid) {
+        if(confirm('Delete?')) {
+            cards = cards.filter(c => c.fullId != fid);
+            localStorage.setItem('zet_v3', JSON.stringify(cards));
+            renderBoard();
+            renderSidebar();
         }
     }
-    function authDropbox() { window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=${DBX_APP_KEY}&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`; }
+
+    function openSettings() {
+        const days = prompt("請輸入復閱週期 (天):", revisitDays);
+        if(days) {
+            revisitDays = days;
+            localStorage.setItem('revisit_days', days);
+            renderSidebar();
+        }
+    }
+
+    function jumpTo(id) {
+        const c = cards.find(x => x.id === id);
+        if(c) editCard(c.fullId);
+    }
 </script>
 </body>
 </html>
