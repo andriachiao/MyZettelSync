@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>ZettelStudio PRO | Total Workflow</title>
+    <title>ZettelStudio PRO | Full Workflow</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.11.0/Dropbox-sdk.min.js"></script>
@@ -11,37 +11,36 @@
         body { font-family: 'Inter', sans-serif; background: #f5f5f5; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         
-        /* 視圖控制邏輯 */
+        /* 視圖切換邏輯 */
         #midEditor, #midBoard, #studioSide { display: none; }
         .view-input #midEditor { display: flex; flex: 1; }
         .view-board #midBoard { display: flex; flex: 1; }
         .view-studio #studioSide { display: flex; flex: 1; }
         .view-studio.show-board #midBoard { display: flex; width: 480px; border-right: 4px solid black; }
 
-        /* 卡片佈局 */
+        /* 卡片與 UI 設計 */
         .card-grid { display: grid; grid-template-columns: repeat(auto-fill, 280px); grid-auto-rows: 320px; gap: 1.5rem; justify-content: center; }
         .board-card { border: 3px solid #000; background: #fff; box-shadow: 6px 6px 0 #000; cursor: pointer; display: flex; flex-direction: column; transition: 0.1s; overflow: hidden; }
         .board-card:hover { transform: translate(-2px, -2px); box-shadow: 10px 10px 0 #000; }
-        
         .active-type { background: black !important; color: white !important; }
-        .kb-hint { font-family: 'JetBrains Mono'; font-size: 10px; background: #eee; padding: 2px 5px; border: 1px solid #ddd; border-radius: 3px; color: #555; }
+        .kb-hint { font-family: 'JetBrains Mono'; font-size: 10px; background: #000; padding: 2px 5px; border-radius: 3px; color: #fff; margin-left: 5px; }
         
-        /* 提示框動畫 */
-        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: black; color: white; padding: 10px 20px; border-radius: 5px; opacity: 0; transition: 0.3s; z-index: 1000; }
+        #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: black; color: white; padding: 10px 20px; border-radius: 5px; opacity: 0; transition: 0.3s; z-index: 1000; pointer-events: none; }
         #toast.show { opacity: 1; }
+        .linking-mode .board-card { border-color: #2563eb; outline: 3px solid #2563eb; }
     </style>
 </head>
 <body id="mainBody" class="view-input">
 
-    <div id="toast">Saved Successfully</div>
+    <div id="toast">Message</div>
 
     <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100] shrink-0">
         <div class="flex items-center gap-6">
             <h1 class="text-lg font-900 uppercase italic tracking-tighter">ZettelStudio</h1>
-            <div id="syncIndicator" class="text-[9px] font-black px-3 py-1 border-2 border-black opacity-30 uppercase">Offline</div>
+            <div id="linkBanner" class="hidden bg-blue-600 text-white text-[10px] font-black px-4 py-1 animate-pulse uppercase">Linking Mode: Select Target Card</div>
         </div>
         <div class="flex gap-3">
-            <button id="studioBoardToggle" onclick="toggleStudioBoard()" class="hidden text-[9px] font-black border-2 border-black px-3 py-1 bg-yellow-400">SHOW BOARD</button>
+            <button id="studioBoardToggle" onclick="toggleStudioBoard()" class="hidden text-[9px] font-black border-2 border-black px-3 py-1 bg-yellow-400 uppercase">Show Board</button>
             <button onclick="handleCloud()" id="cloudBtn" class="text-[9px] font-black border-2 border-black px-3 py-1 bg-blue-500 text-white uppercase">Link Dropbox</button>
         </div>
     </header>
@@ -51,8 +50,11 @@
             <div class="flex-1 overflow-y-auto no-scrollbar">
                 <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-b uppercase">Navigation</div>
                 <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between" onclick="changeView('input')"><span>Capture</span><span class="kb-hint">C+S+M</span></div>
-                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between" onclick="filterBoard('Idea')"><span>Idea 盒</span><span id="c-i">0</span></div>
-                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between" onclick="filterBoard('摘錄')"><span>摘錄盒</span><span id="c-q">0</span></div>
+                <div class="p-4 text-xs font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between" onclick="changeView('board')"><span>Vault</span><span class="kb-hint">C+S+B</span></div>
+                
+                <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-y uppercase">Collection Stats</div>
+                <div class="p-4 text-xs font-bold border-b flex justify-between"><span>Idea Cards</span><span id="c-i">0</span></div>
+                <div class="p-4 text-xs font-bold border-b flex justify-between"><span>Quote Cards</span><span id="c-q">0</span></div>
                 
                 <div class="p-3 bg-zinc-50 text-[8px] font-black opacity-40 border-y uppercase">Keywords</div>
                 <div id="tagBox" class="flex flex-col"></div>
@@ -61,26 +63,26 @@
 
         <main id="midBoard" class="flex flex-col bg-zinc-100 overflow-hidden">
             <div class="p-3 border-b border-black/5 flex justify-between items-center bg-white/50">
-                <span class="text-[9px] font-black opacity-40 uppercase">Vault Content</span>
-                <button onclick="pushToStudio()" class="text-[9px] font-black bg-black text-white px-4 py-1 uppercase">Push Selected to Studio</button>
+                <span class="text-[9px] font-black opacity-40 uppercase">Card Vault</span>
+                <button onclick="pushToStudio()" class="text-[9px] font-black bg-black text-white px-4 py-1 uppercase hover:bg-blue-600 transition">Push Selection to Studio</button>
             </div>
             <div id="boardGrid" class="flex-1 overflow-y-auto p-8 card-grid no-scrollbar pb-24"></div>
         </main>
 
         <main id="midEditor" class="flex flex-col items-center pt-24 bg-zinc-100">
-            <div class="max-w-xl w-full bg-white p-10 border-4 border-black shadow-[12px_12px_0_0_#000] relative">
+            <div class="max-w-xl w-full bg-white p-10 border-4 border-black shadow-[12px_12px_0_0_#000]">
                 <div class="flex border-2 border-black w-fit mb-6 text-[10px] font-black">
                     <button id="ti" class="px-5 py-2 active-type">IDEA <span class="opacity-40 ml-1">C+S+1</span></button>
                     <button id="tq" class="px-5 py-2 border-l-2 border-black">QUOTE <span class="opacity-40 ml-1">C+S+2</span></button>
                 </div>
-                <textarea id="mainIn" class="w-full h-72 text-2xl outline-none leading-relaxed resize-none font-medium" placeholder="Record your thought..."></textarea>
+                <textarea id="mainIn" class="w-full h-72 text-2xl outline-none leading-relaxed resize-none font-medium" placeholder="What's on your mind?"></textarea>
                 
                 <div class="mt-8 border-t-2 border-dashed border-zinc-200 pt-4 flex flex-col gap-2">
-                    <div class="flex justify-between items-center text-[10px] font-black text-zinc-400">
-                        <span>SAVE & CLOUD SYNC</span><span class="kb-hint">Cmd + Shift + L</span>
+                    <div class="flex justify-between items-center text-[10px] font-black text-zinc-400 uppercase">
+                        <span>Save & Cloud Sync</span><span class="kb-hint">Cmd + Shift + L</span>
                     </div>
-                    <div class="flex justify-between items-center text-[10px] font-black text-zinc-400">
-                        <span>GO TO STUDIO</span><span class="kb-hint">Cmd + Shift + M</span>
+                    <div class="flex justify-between items-center text-[10px] font-black text-zinc-400 uppercase">
+                        <span>Go to Studio</span><span class="kb-hint">Cmd + Shift + M</span>
                     </div>
                 </div>
             </div>
@@ -89,12 +91,11 @@
         <main id="studioSide" class="bg-white flex flex-col overflow-hidden">
             <div class="p-8 border-b-4 border-black flex justify-between items-end shrink-0">
                 <div class="flex-1">
-                    <span class="text-[9px] font-black opacity-30 block mb-1 uppercase">Current Project</span>
-                    <input id="projName" class="font-900 text-3xl uppercase outline-none w-full" value="Untitled Project">
-                </div>
-                <div class="flex flex-col items-end gap-1">
-                    <div class="flex items-center gap-2 text-[9px] font-black uppercase">EXPORT <span class="kb-hint">C+S+E</span></div>
-                    <div class="flex items-center gap-2 text-[9px] font-black uppercase">NEW <span class="kb-hint">C+S+P</span></div>
+                    <input id="projName" class="font-900 text-3xl uppercase outline-none w-full border-b-2 border-transparent focus:border-black" value="Untitled Draft">
+                    <div class="mt-3 flex gap-4 text-[9px] font-black opacity-40 uppercase">
+                        <span>Export MD <span class="kb-hint">C+S+E</span></span>
+                        <span>New Project <span class="kb-hint">C+S+P</span></span>
+                    </div>
                 </div>
             </div>
             <div id="studioCanvas" class="flex-1 overflow-y-auto p-12 no-scrollbar space-y-10 bg-zinc-50/30"></div>
@@ -102,42 +103,35 @@
     </div>
 
 <script>
-    // --- 配置快捷鍵 (可隨時在此修改按鍵) ---
-    const HOTKEYS = {
-        SAVE: 'l',      // Cmd+Shift+L (避免與 Chrome 衝突)
-        SWITCH: 'm',    // Cmd+Shift+M (切換輸入/工作室)
-        VAULT: 'b',     // Cmd+Shift+B (看板)
-        SEARCH: 'f',    // Cmd+Shift+F
-        EXPORT: 'e',    // Cmd+Shift+E
-        NEW: 'p',       // Cmd+Shift+P
-        TYPE1: '!',     // Cmd+Shift+1
-        TYPE2: '@'      // Cmd+Shift+2
-    };
-
-    const CLIENT_ID = '2zshj5fwkxe18e6';
+    // --- 已填入 App Key ---
+    const CLIENT_ID = '2zshj5fwkxe18e6'; 
     let dbx = null;
-    let cards = JSON.parse(localStorage.getItem('Z_V17_Cards')) || [];
-    let project = JSON.parse(localStorage.getItem('Z_V17_Proj')) || { segments: [] };
+    let cards = JSON.parse(localStorage.getItem('Z_V19_Cards')) || [];
+    let project = JSON.parse(localStorage.getItem('Z_V19_Proj')) || { segments: [] };
     let currentType = 'Idea';
+    let linkSourceId = null;
 
-    // --- 鍵盤監聽 ---
+    // --- 快捷鍵邏輯 ---
+    const HOTKEYS = { SAVE: 'l', SWITCH: 'm', VAULT: 'b', EXPORT: 'e', NEW: 'p', TYPE1: '!', TYPE2: '@' };
+
     window.addEventListener('keydown', e => {
         const cmdShift = (e.metaKey || e.ctrlKey) && e.shiftKey;
         if (!cmdShift) return;
         const key = e.key.toLowerCase();
-
-        if (['l','m','b','f','e','p','1','2','!','@'].includes(key)) e.preventDefault();
+        
+        // 阻止瀏覽器默認行為
+        if (['l','m','b','e','p','1','2','!','@'].includes(key)) e.preventDefault();
 
         if (key === HOTKEYS.SAVE) saveCard();
         if (key === HOTKEYS.SWITCH) changeView(document.body.className.includes('view-input') ? 'studio' : 'input');
         if (key === HOTKEYS.VAULT) changeView('board');
         if (key === HOTKEYS.EXPORT) exportDraft();
-        if (key === HOTKEYS.NEW) { if(confirm('New Project?')) { project = { segments: [] }; renderProject(); } }
+        if (key === HOTKEYS.NEW) { if(confirm('Clear Studio?')) { project = { segments: [] }; renderProject(); } }
         if (key === HOTKEYS.TYPE1 || key === '1') setType('Idea');
         if (key === HOTKEYS.TYPE2 || key === '2') setType('摘錄');
     });
 
-    // --- 視圖控制 ---
+    // --- 視圖管理 ---
     function changeView(v) {
         document.body.className = 'view-' + v;
         document.getElementById('studioBoardToggle').classList.toggle('hidden', v !== 'studio');
@@ -146,71 +140,95 @@
         if (v === 'input') document.getElementById('mainIn').focus();
     }
 
-    // --- 核心操作 ---
+    // --- 卡片保存 ---
     function saveCard() {
         const val = document.getElementById('mainIn').value.trim();
         if (!val) return;
         const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
         const tags = (val.match(/#([^\s#]+)/g) || []).map(t => t.substring(1));
-        cards.unshift({ id, content: val, mode: currentType, time: Date.now(), tags });
         
+        cards.unshift({ id, content: val, mode: currentType, time: Date.now(), tags });
         document.getElementById('mainIn').value = "";
         saveData(); updateStats();
         if (dbx) syncNow();
-        
-        // 保存後留在原地，僅提示
-        const toast = document.getElementById('toast');
-        toast.innerText = `Card #${id} Saved & Synced`;
-        toast.classList.add('show');
-        setTimeout(() => toast.classList.remove('show'), 2000);
+        showToast(`Saved #${id} & Staying in Input`);
     }
 
+    // --- 看板渲染與連結功能 ---
+    function renderBoard() {
+        const grid = document.getElementById('boardGrid');
+        grid.innerHTML = cards.map(c => `
+            <div class="board-card p-5" onclick="${linkSourceId ? `finishLink('${c.id}')` : ''}">
+                <div class="flex justify-between items-center border-b border-black pb-2 mb-3 text-[10px] font-black uppercase">
+                    <span>#${c.id}</span>
+                    <div class="flex gap-3">
+                        <button onclick="startLink('${c.id}', event)" class="text-blue-600 font-bold hover:underline italic">Link</button>
+                        <input type="checkbox" class="card-sel w-4 h-4 border-2 border-black" value="${c.id}" onclick="event.stopPropagation()">
+                    </div>
+                </div>
+                <div class="flex-1 text-sm overflow-y-auto no-scrollbar prose prose-sm leading-relaxed">${marked.parse(c.content)}</div>
+                <div class="mt-2 pt-2 border-t border-zinc-100 text-[8px] opacity-30 font-black uppercase flex justify-between">
+                    <span>${c.mode}</span><span>${new Date(c.time).toLocaleDateString()}</span>
+                </div>
+            </div>`).join('');
+    }
+
+    function startLink(id, e) {
+        e.stopPropagation();
+        linkSourceId = id;
+        document.body.classList.add('linking-mode');
+        document.getElementById('linkBanner').classList.remove('hidden');
+        changeView('board');
+    }
+
+    function finishLink(id) {
+        if(linkSourceId && linkSourceId !== id) {
+            const target = cards.find(x => x.id === id);
+            target.content += `\n\nRelated: [[${linkSourceId}]]`;
+            saveData();
+            showToast(`Linked #${linkSourceId} to #${id}`);
+        }
+        cancelLink();
+    }
+
+    function cancelLink() {
+        linkSourceId = null;
+        document.body.classList.remove('linking-mode');
+        document.getElementById('linkBanner').classList.add('hidden');
+        renderBoard();
+    }
+
+    // --- 工作室繪製 ---
+    function renderProject() {
+        const canvas = document.getElementById('studioCanvas');
+        canvas.innerHTML = project.segments.map((seg, idx) => seg.type === 'card' ? 
+            `<div class="p-8 bg-white border-l-[12px] border-black shadow-sm relative group">
+                <div class="text-blue-600 mono font-black text-[10px] mb-2 tracking-widest">[[${seg.id}]]</div>
+                <div class="prose prose-sm">${marked.parse(cards.find(x => x.id === seg.id).content)}</div>
+                <button onclick="removeSeg(${idx})" class="absolute top-2 right-2 hidden group-hover:block text-red-500 font-black text-[9px] border border-red-200 px-2 py-1 bg-red-50">REMOVE</button>
+            </div>` : 
+            `<textarea oninput="project.segments[${idx}].content=this.value; saveData();" class="w-full min-h-[120px] text-xl outline-none bg-transparent border-b-2 border-zinc-100 focus:border-black py-4 leading-relaxed font-serif italic" placeholder="Continue writing...">${seg.content}</textarea>`
+        ).join('');
+    }
+
+    // --- Dropbox 核心對接 (修復 404) ---
     function handleCloud() {
         const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
-        // 修復 404：確保 redirect_uri 是絕對路徑且不含 hash
-        const redirectUri = window.location.href.split('#')[0];
+        // 動態獲取當前網址，確保 Redirect URI 匹配
+        const redirectUri = window.location.origin + window.location.pathname;
         window.location.href = dbxAuth.getAuthenticationUrl(redirectUri);
     }
 
     async function syncNow() {
         if (!dbx) return;
-        document.getElementById('syncIndicator').innerText = "Syncing...";
         try {
             await dbx.filesUpload({ path: '/vault.json', contents: JSON.stringify(cards), mode: 'overwrite' });
             await dbx.filesUpload({ path: '/studio.json', contents: JSON.stringify(project), mode: 'overwrite' });
-            document.getElementById('syncIndicator').innerText = "Cloud Active";
-            document.getElementById('syncIndicator').classList.replace('opacity-30', 'bg-green-600');
-            document.getElementById('syncIndicator').classList.add('text-white');
-        } catch(e) { document.getElementById('syncIndicator').innerText = "Sync Error"; }
+            showToast('Cloud Synced');
+        } catch(e) { showToast('Sync Error'); }
     }
 
-    // --- 界面渲染 ---
-    function renderBoard(filter) {
-        const grid = document.getElementById('boardGrid');
-        let list = filter ? cards.filter(c => c.mode === filter || c.tags.includes(filter)) : cards;
-        grid.innerHTML = list.map(c => `
-            <div class="board-card p-5">
-                <div class="flex justify-between items-center border-b border-black pb-2 mb-3 text-[10px] font-black">
-                    <span>#${c.id}</span>
-                    <input type="checkbox" class="card-sel" value="${c.id}">
-                </div>
-                <div class="flex-1 text-sm overflow-y-auto no-scrollbar prose prose-sm">${marked.parse(c.content)}</div>
-                <div class="mt-2 text-[8px] opacity-30 font-black uppercase text-right">${c.mode}</div>
-            </div>`).join('');
-    }
-
-    function renderProject() {
-        const canvas = document.getElementById('studioCanvas');
-        canvas.innerHTML = project.segments.map((seg, idx) => seg.type === 'card' ? 
-            `<div class="p-8 bg-white border-l-[12px] border-black shadow-sm relative group">
-                <div class="text-blue-600 mono font-black text-[10px] mb-2">[[${seg.id}]]</div>
-                <div class="prose prose-sm">${marked.parse(cards.find(x => x.id === seg.id).content)}</div>
-                <button onclick="removeSeg(${idx})" class="absolute top-2 right-2 hidden group-hover:block text-red-500 font-black text-[9px]">REMOVE</button>
-            </div>` : 
-            `<textarea oninput="project.segments[${idx}].content=this.value; saveData();" class="w-full min-h-[120px] text-xl outline-none bg-transparent border-b-2 border-zinc-100 focus:border-black py-4 leading-relaxed" placeholder="Write development...">${seg.content}</textarea>`
-        ).join('');
-    }
-
+    // --- 輔助邏輯 ---
     function pushToStudio() {
         document.querySelectorAll('.card-sel:checked').forEach(cb => {
             project.segments.push({ type: 'card', id: cb.value });
@@ -220,40 +238,36 @@
     }
 
     function exportDraft() {
-        const name = document.getElementById('projName').value;
-        let md = `# ${name}\n\n`;
-        project.segments.forEach(s => {
-            if(s.type === 'card') md += `\n> ${cards.find(x => x.id === s.id).content}\n\n`;
-            else md += s.content + "\n";
-        });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'})); a.download = `${name}.md`; a.click();
+        const md = project.segments.map(s => s.type === 'card' ? `\n> ${cards.find(x => x.id === s.id).content}\n` : s.content).join('\n');
+        const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([md], {type:'text/markdown'})); a.download = `${document.getElementById('projName').value}.md`; a.click();
     }
 
-    // --- 工具與統計 ---
-    function setType(t) { currentType = t; document.getElementById('ti').className = t === 'Idea' ? 'px-5 py-2 active-type' : 'px-5 py-2'; document.getElementById('tq').className = t === '摘錄' ? 'px-5 py-2 active-type border-l-2 border-black' : 'px-5 py-2 border-l-2 border-black'; }
-    function saveData() { localStorage.setItem('Z_V17_Cards', JSON.stringify(cards)); localStorage.setItem('Z_V17_Proj', JSON.stringify(project)); }
-    function removeSeg(i) { project.segments.splice(i,1); saveData(); renderProject(); }
+    function setType(t) { currentType = t; document.getElementById('ti').classList.toggle('active-type', t==='Idea'); document.getElementById('tq').classList.toggle('active-type', t==='摘錄'); }
+    function saveData() { localStorage.setItem('Z_V19_Cards', JSON.stringify(cards)); localStorage.setItem('Z_V19_Proj', JSON.stringify(project)); }
+    function showToast(m) { const t = document.getElementById('toast'); t.innerText = m; t.classList.add('show'); setTimeout(() => t.classList.remove('show'), 2000); }
     function toggleStudioBoard() { document.body.classList.toggle('show-board'); }
-    function filterBoard(f) { changeView('board'); renderBoard(f); }
-
     function updateStats() {
         document.getElementById('c-i').innerText = cards.filter(c => c.mode === 'Idea').length;
         document.getElementById('c-q').innerText = cards.filter(c => c.mode === '摘錄').length;
         const tags = {}; cards.forEach(c => c.tags.forEach(t => tags[t] = (tags[t]||0)+1));
-        document.getElementById('tagBox').innerHTML = Object.entries(tags).map(([k,v]) => `<div class="p-4 text-xs font-bold border-b hover:bg-zinc-100 cursor-pointer flex justify-between" onclick="filterBoard('${k}')"><span>#${k}</span><span class="opacity-30">${v}</span></div>`).join('');
+        document.getElementById('tagBox').innerHTML = Object.entries(tags).map(([k,v]) => `<div class="p-3 text-[11px] font-bold border-b hover:bg-black hover:text-white cursor-pointer flex justify-between uppercase"><span>#${k}</span><span class="opacity-30">${v}</span></div>`).join('');
     }
+    function removeSeg(i) { project.segments.splice(i,1); saveData(); renderProject(); }
 
     window.onload = () => {
+        // 處理 Dropbox 回傳
         const hash = new URLSearchParams(window.location.hash.substring(1));
-        if (hash.get('access_token')) { localStorage.setItem('db_tk_v17', hash.get('access_token')); window.history.replaceState({}, "", window.location.pathname); }
-        const tk = localStorage.getItem('db_tk_v17');
+        if (hash.get('access_token')) { localStorage.setItem('db_tk_v19', hash.get('access_token')); window.history.replaceState({}, "", window.location.pathname); }
+        
+        const tk = localStorage.getItem('db_tk_v19');
         if (tk) {
             dbx = new Dropbox.Dropbox({ accessToken: tk });
-            document.getElementById('cloudBtn').innerText = "Sync Active";
-            document.getElementById('cloudBtn').classList.replace('bg-blue-500', 'bg-green-600');
-            syncNow();
+            const btn = document.getElementById('cloudBtn');
+            btn.innerText = "Sync Active";
+            btn.classList.replace('bg-blue-500', 'bg-green-600');
         }
-        updateStats(); changeView('input');
+        updateStats();
+        changeView('input');
     };
 </script>
 </body>
