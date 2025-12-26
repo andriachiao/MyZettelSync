@@ -2,237 +2,183 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>MyZettelSync | 複利回顧版</title>
+    <title>MyZettelSync | Studio 工作坊</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #fff; color: #000; height: 100vh; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; background: #f4f4f5; color: #000; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
-        .idx-item { border-bottom: 2px solid #000; cursor: pointer; padding: 10px 16px; transition: 0.2s; font-size: 12px; font-weight: 700; }
-        .idx-item:hover { background: #000; color: #fff; }
-        .review-card { border: 4px solid #000; background: #fff; transition: 0.3s; }
-        .review-card:hover { transform: translateY(-5px); box-shadow: 10px 10px 0 #000; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .archived { opacity: 0.5; grayscale: 1; }
+        /* 項目區塊動畫 */
+        .studio-block { border-left: 4px solid transparent; transition: 0.2s; }
+        .studio-block:hover { border-left: 4px solid #000; background: #fff; }
     </style>
 </head>
 <body class="flex flex-col">
 
-    <header class="h-16 border-b-4 border-black flex items-center justify-between px-8 bg-white z-[70]">
-        <h1 class="text-xl font-900 tracking-tighter uppercase">MyZettelSync</h1>
-        <div class="flex gap-4 items-center">
-            <div class="flex border-2 border-black bg-white">
-                <button onclick="showReview('1w')" class="text-[9px] font-black px-3 py-1 border-r-2 border-black hover:bg-yellow-400">1W REVIEW</button>
-                <button onclick="showReview('1m')" class="text-[9px] font-black px-3 py-1 border-r-2 border-black hover:bg-yellow-400">1M REVIEW</button>
-                <button onclick="showReview('3m')" class="text-[9px] font-black px-3 py-1 hover:bg-yellow-400">3M REVIEW</button>
-            </div>
-            <button onclick="authDropbox()" class="text-[10px] font-black border-2 border-black px-3 py-1 uppercase">Sync</button>
-            <div id="syncIndicator" class="w-3 h-3 border-2 border-black rounded-full"></div>
+    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100]">
+        <div class="flex items-center gap-6">
+            <h1 class="text-lg font-900 tracking-tighter uppercase">Zettel Studio</h1>
+            <nav class="flex gap-4 text-[10px] font-black uppercase">
+                <button onclick="switchView('library')" class="hover:underline">Library</button>
+                <button onclick="switchView('studio')" class="hover:underline text-blue-600">Writing Studio</button>
+            </nav>
+        </div>
+        <div id="syncStatus" class="flex gap-2 items-center">
+            <button onclick="exportProject()" class="text-[9px] border-2 border-black px-2 py-1 font-black">EXPORT PROJECT</button>
+            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
-        <aside class="w-64 border-r-4 border-black flex flex-col shrink-0 bg-white">
-            <div id="boxContainer" class="flex-1 overflow-y-auto no-scrollbar">
-                <div class="p-3 bg-black text-white text-[9px] font-black uppercase tracking-widest">Main Boxes</div>
-                <div class="idx-item flex justify-between" onclick="filterBoardByMode('摘錄')"><span>摘錄盒</span><span id="count-quote" class="mono opacity-50">0</span></div>
-                <div class="idx-item flex justify-between" onclick="filterBoardByMode('Idea')"><span>Idea 盒</span><span id="count-idea" class="mono opacity-50">0</span></div>
-                
-                <div class="p-3 bg-zinc-100 text-[9px] font-black uppercase border-b-2 border-black">Time Archive</div>
-                <div id="timeArchive"></div>
-
-                <div class="p-3 bg-zinc-100 text-[9px] font-black uppercase border-b-2 border-black">Keywords</div>
-                <div id="keywordIndex"></div>
+        
+        <aside class="w-64 border-r-2 border-zinc-300 flex flex-col bg-white">
+            <div class="p-4 border-b-2 border-black">
+                <input type="text" placeholder="搜尋卡片加入項目..." class="w-full text-xs outline-none">
             </div>
+            <div id="libraryList" class="flex-1 overflow-y-auto no-scrollbar">
+                </div>
         </aside>
 
-        <main class="flex-1 flex flex-col p-12 bg-zinc-50 overflow-y-auto no-scrollbar">
-            <div id="mainWorkArea" class="max-w-2xl w-full mx-auto space-y-6">
-                <div class="bg-white border-4 border-black p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative">
-                    <div class="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
-                        <span id="activeId" class="mono font-black text-2xl">#NEW</span>
-                        <span id="activeMode" class="bg-black text-white px-3 py-1 text-[10px] font-black hidden uppercase"></span>
-                    </div>
-                    <textarea id="cardInput" class="w-full h-64 text-2xl outline-none leading-relaxed" placeholder="寫入思考..."></textarea>
-                    <div class="mt-6 flex justify-between">
-                        <button onclick="saveCard()" class="bg-black text-white px-8 py-3 font-900 text-xs uppercase">File Card</button>
-                        <button onclick="toggleBoard(true)" class="border-2 border-black px-6 py-3 font-900 text-xs uppercase">Explore Archive</button>
-                    </div>
+        <section id="shuttleArea" class="w-1/3 border-r-2 border-zinc-300 bg-zinc-50 overflow-y-auto p-6">
+            <div class="mb-6 flex justify-between items-center">
+                <h3 class="text-xs font-black uppercase opacity-40">Review & Selection</h3>
+                <div class="flex gap-2">
+                    <button onclick="loadReview('1w')" class="text-[8px] border border-black px-1">1W</button>
+                    <button onclick="loadReview('1m')" class="text-[8px] border border-black px-1">1M</button>
                 </div>
             </div>
-            
-            <div id="reviewArea" class="hidden max-w-4xl w-full mx-auto space-y-8 pb-20">
-                <div class="flex justify-between items-end border-b-4 border-black pb-4">
-                    <h2 id="reviewTitle" class="text-4xl font-900 uppercase">Review Radar</h2>
-                    <button onclick="closeReview()" class="font-black underline uppercase text-sm">Back to Editor</button>
+            <div id="shuttleCards" class="space-y-4">
                 </div>
-                <div id="reviewGrid" class="grid grid-cols-1 md:grid-cols-2 gap-8"></div>
+        </section>
+
+        <main class="flex-1 bg-white flex flex-col overflow-hidden">
+            <div class="h-12 border-b-2 border-zinc-100 flex items-center px-6 gap-4">
+                <select id="projectSelector" onchange="loadProject()" class="text-xs font-black outline-none bg-transparent">
+                    <option>2025 新論文項目</option>
+                    <option>未命名小說</option>
+                </select>
+                <button class="text-[18px] font-light">+</button>
+            </div>
+
+            <div id="studioCanvas" class="flex-1 overflow-y-auto p-12 no-scrollbar">
+                <div class="max-w-xl mx-auto space-y-2" id="projectBlocks">
+                    <div class="text-center py-20">
+                        <p class="text-zinc-300 font-900 text-xs uppercase tracking-widest">從左側或中間將卡片<br>傳送到這裡開始創作</p>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
 
-    <div id="boardLayer" class="hidden fixed inset-0 bg-white z-[100] p-12 overflow-y-auto">
-        <div class="flex justify-between items-center mb-10 border-b-4 border-black pb-4">
-            <h2 id="boardTitle" class="text-3xl font-900 uppercase">Knowledge Board</h2>
-            <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-4">CLOSE</button>
-        </div>
-        <div id="boardContent" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
-    </div>
-
 <script>
+    // 數據模擬
     let cards = JSON.parse(localStorage.getItem('zet_v10')) || [];
-    let dbx;
-
-    window.onload = () => {
-        renderSidebar();
-        initShortcuts();
-        initDropbox();
+    let currentProject = {
+        title: "2025 新論文項目",
+        segments: [] // {type: 'card', id: '...'} or {type: 'text', content: '...'}
     };
 
-    function saveCard() {
-        const content = document.getElementById('cardInput').value.trim();
-        if(!content) return;
-        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        const tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
-        
-        cards.unshift({ 
-            id, 
-            fullId: Date.now(), 
-            content, 
-            tags, 
-            mode: document.getElementById('activeMode').innerText, 
-            time: Date.now(),
-            status: 'active' // active, archived
-        });
-        
-        localStorage.setItem('zet_v10', JSON.stringify(cards));
-        document.getElementById('cardInput').value = "";
-        renderSidebar();
-        uploadToDropbox();
+    window.onload = () => {
+        renderLibrary();
+        renderStudio();
+    };
+
+    function renderLibrary() {
+        const list = document.getElementById('libraryList');
+        list.innerHTML = cards.map(c => `
+            <div class="p-4 border-b border-zinc-100 hover:bg-zinc-50 cursor-pointer group" onclick="addToShuttle('${c.fullId}')">
+                <div class="flex justify-between items-center mb-1">
+                    <span class="mono text-[9px] font-black">#${c.id}</span>
+                    <span class="text-[8px] uppercase opacity-30">${c.mode || ''}</span>
+                </div>
+                <div class="text-[11px] line-clamp-2 font-bold">${c.content.substring(0,60)}</div>
+            </div>
+        `).join('');
     }
 
-    function renderSidebar() {
-        const counts = { '摘錄': 0, 'Idea': 0 };
-        const kws = {};
-        const timeline = {}; // { "2023-12": 5 }
+    function addToShuttle(fid) {
+        const c = cards.find(x => x.fullId == fid);
+        const container = document.getElementById('shuttleCards');
+        const cardHtml = `
+            <div class="bg-white border-2 border-black p-4 shadow-[4px_4px_0_0_#000] relative">
+                <div class="text-[10px] font-black mb-2">#${c.id}</div>
+                <div class="text-xs leading-relaxed mb-4">${marked.parse(c.content)}</div>
+                <button onclick="pushToStudio('${c.id}')" class="w-full bg-blue-600 text-white text-[9px] font-black py-1 uppercase hover:bg-black transition">
+                    🚀 傳送到項目 (Push to Studio)
+                </button>
+            </div>
+        `;
+        container.innerHTML = cardHtml + container.innerHTML;
+    }
 
-        cards.forEach(c => {
-            if(c.status !== 'archived') {
-                if(c.mode) counts[c.mode]++;
-                c.tags.forEach(t => kws[t] = (kws[t] || 0) + 1);
+    // 傳送到項目右側
+    function pushToStudio(id) {
+        currentProject.segments.push({ type: 'card', id: id });
+        // 自動在卡片後加一個文字區塊，方便寫過渡段
+        currentProject.segments.push({ type: 'text', content: '' });
+        renderStudio();
+    }
+
+    function renderStudio() {
+        const canvas = document.getElementById('projectBlocks');
+        if (currentProject.segments.length === 0) return;
+
+        canvas.innerHTML = currentProject.segments.map((seg, idx) => {
+            if (seg.type === 'card') {
+                const cardData = cards.find(c => c.id === seg.id);
+                return `
+                    <div class="studio-block p-4 bg-zinc-50 border border-zinc-200 opacity-60 relative group">
+                        <span class="absolute -left-8 top-4 text-[8px] font-black opacity-20">REF</span>
+                        <div class="text-[10px] font-black border-b border-zinc-200 mb-2 pb-1">[[${cardData.id}]]</div>
+                        <div class="text-xs italic">${cardData.content.substring(0,100)}...</div>
+                        <button onclick="removeSegment(${idx})" class="absolute right-2 top-2 hidden group-hover:block text-[10px] text-red-500">REMOVE</button>
+                    </div>
+                `;
+            } else {
+                return `
+                    <div class="studio-block p-4 relative group">
+                        <span class="absolute -left-8 top-4 text-[8px] font-black opacity-20 text-blue-600">WRITE</span>
+                        <textarea oninput="updateSegment(${idx}, this.value)" 
+                            class="w-full min-h-[80px] text-sm leading-relaxed outline-none bg-transparent resize-none placeholder-zinc-200"
+                            placeholder="在這裡輸入過渡段落或新的想法...">${seg.content}</textarea>
+                    </div>
+                `;
             }
-            const date = new Date(c.time);
-            const key = `${date.getFullYear()} - ${String(date.getMonth() + 1).padStart(2, '0')}`;
-            timeline[key] = (timeline[key] || 0) + 1;
+        }).join('');
+    }
+
+    function updateSegment(idx, val) {
+        currentProject.segments[idx].content = val;
+    }
+
+    function removeSegment(idx) {
+        currentProject.segments.splice(idx, 1);
+        renderStudio();
+    }
+
+    function exportProject() {
+        let finalOutput = `# ${currentProject.title}\n\n`;
+        currentProject.segments.forEach(seg => {
+            if (seg.type === 'card') {
+                const c = cards.find(x => x.id === seg.id);
+                finalOutput += `\n> ${c.content}\n\n`;
+            } else {
+                finalOutput += seg.content + "\n";
+            }
         });
-
-        document.getElementById('count-quote').innerText = counts['摘錄'];
-        document.getElementById('count-idea').innerText = counts['Idea'];
-
-        // 渲染時間歸檔
-        document.getElementById('timeArchive').innerHTML = Object.entries(timeline)
-            .sort((a,b) => b[0].localeCompare(a[0]))
-            .map(([date, count]) => `
-            <div class="idx-item flex justify-between" onclick="filterByTime('${date}')">
-                <span>${date}</span><span class="mono opacity-40">${count}</span>
-            </div>
-        `).join('');
-
-        // 渲染關鍵詞 (略)
-        document.getElementById('keywordIndex').innerHTML = Object.entries(kws).map(([t, n]) => `
-            <div class="idx-item flex justify-between" onclick="filterBoardByTag('${t}')">
-                <span>#${t}</span><span class="mono opacity-40">${n}</span>
-            </div>
-        `).join('');
+        const blob = new Blob([finalOutput], {type: 'text/markdown'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `${currentProject.title}.md`;
+        a.click();
     }
 
-    // 回顧系統核心邏輯
-    function showReview(period) {
-        document.getElementById('mainWorkArea').classList.add('hidden');
-        const reviewArea = document.getElementById('reviewArea');
-        reviewArea.classList.remove('hidden');
-        
-        const now = Date.now();
-        const periods = {
-            '1w': 7 * 24 * 60 * 60 * 1000,
-            '1m': 30 * 24 * 60 * 60 * 1000,
-            '3m': 90 * 24 * 60 * 60 * 1000
-        };
-
-        const targetTime = now - periods[period];
-        // 抓取該時間點前後 3 天的卡片進行「重新發現」
-        const reviewList = cards.filter(c => Math.abs(c.time - targetTime) < (3 * 24 * 60 * 60 * 1000));
-        
-        document.getElementById('reviewTitle').innerText = `${period} Review Radar`;
-        const grid = document.getElementById('reviewGrid');
-        
-        if(reviewList.length === 0) {
-            grid.innerHTML = `<p class="col-span-2 text-zinc-400 font-black py-20 text-center">這段時間沒有需要回顧的內容。</p>`;
-            return;
-        }
-
-        grid.innerHTML = reviewList.map(c => `
-            <div class="review-card p-8 flex flex-col min-h-[300px]">
-                <div class="flex justify-between mb-4">
-                    <span class="mono font-black">#${c.id}</span>
-                    <span class="text-[9px] opacity-40">${new Date(c.time).toLocaleDateString()}</span>
-                </div>
-                <div class="flex-1 text-lg font-bold mb-6">${marked.parse(c.content)}</div>
-                <div class="grid grid-cols-2 gap-2">
-                    <button onclick="developCard('${c.fullId}')" class="border-2 border-black py-2 text-[10px] font-black hover:bg-black hover:text-white">發展/修改</button>
-                    <button onclick="toggleBoard(true)" class="border-2 border-black py-2 text-[10px] font-black hover:bg-black hover:text-white">尋找連結</button>
-                    <button onclick="archiveCard('${c.fullId}')" class="border-2 border-black py-2 text-[10px] font-black bg-zinc-100 hover:bg-zinc-800 hover:text-white">歸檔</button>
-                    <button onclick="deleteCard('${c.fullId}')" class="border-2 border-red-600 text-red-600 py-2 text-[10px] font-black hover:bg-red-600 hover:text-white">刪除</button>
-                </div>
-            </div>
-        `).join('');
+    function switchView(v) {
+        // 切換介面邏輯
+        alert("切換到 " + v + " 視圖（已在當前並行顯示）");
     }
-
-    function archiveCard(fid) {
-        const c = cards.find(x => x.fullId == fid);
-        c.status = 'archived';
-        saveAndRefresh();
-    }
-
-    function deleteCard(fid) {
-        if(confirm("確定刪除此卡片？")) {
-            cards = cards.filter(x => x.fullId != fid);
-            saveAndRefresh();
-        }
-    }
-
-    function developCard(fid) {
-        const c = cards.find(x => x.fullId == fid);
-        document.getElementById('cardInput').value = c.content + "\n\n[發展]: ";
-        closeReview();
-        // 進入修改模式邏輯 (略)
-    }
-
-    function saveAndRefresh() {
-        localStorage.setItem('zet_v10', JSON.stringify(cards));
-        renderSidebar();
-        closeReview();
-        uploadToDropbox();
-    }
-
-    function closeReview() {
-        document.getElementById('reviewArea').classList.add('hidden');
-        document.getElementById('mainWorkArea').classList.remove('hidden');
-    }
-
-    function filterByTime(dateStr) {
-        toggleBoard(true);
-        const filtered = cards.filter(c => {
-            const d = new Date(c.time);
-            const key = `${d.getFullYear()} - ${String(d.getMonth() + 1).padStart(2, '0')}`;
-            return key === dateStr;
-        });
-        renderBoard(filtered);
-    }
-    
-    // (其餘看板、Dropbox 邏輯同前版本，確保系統穩定)
 </script>
 </body>
 </html>
