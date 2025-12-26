@@ -2,158 +2,163 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>ZettelSync | Ultimate Studio</title>
+    <title>ZettelSync | Ultimate Integrated</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
         body { font-family: 'Inter', sans-serif; background: #fafafa; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
         .sidebar-hidden { width: 0 !important; opacity: 0; pointer-events: none; border: none !important; }
-        .transition-all-custom { transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
-        .studio-block { border-left: 3px solid transparent; transition: 0.2s; }
-        .studio-block:hover { border-left: 3px solid #000; background: #fff; }
+        .transition-custom { transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
+        .idx-item { border-bottom: 2px solid #000; cursor: pointer; padding: 10px 16px; transition: 0.2s; font-size: 12px; font-weight: 700; }
+        .idx-item:hover { background: #000; color: #fff; }
+        .conn-active { background: #ffeb3b !important; color: #000 !important; border: 4px solid #000 !important; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body class="flex flex-col">
 
-    <header class="h-12 flex items-center justify-between px-6 bg-white border-b-2 border-black z-[100]">
+    <header class="h-14 flex items-center justify-between px-6 bg-white border-b-4 border-black z-[100]">
         <div class="flex items-center gap-6">
-            <h1 class="text-sm font-900 uppercase">ZettelSync <span class="text-[10px] opacity-30">v12</span></h1>
-            <div class="hidden md:flex gap-4 text-[9px] font-black opacity-40 uppercase">
-                <span>Ctrl+N: New</span><span>Ctrl+S: Save</span><span>Ctrl+J: Studio</span>
+            <h1 class="text-lg font-900 uppercase tracking-tighter">ZettelSync</h1>
+            <div class="text-[10px] font-black opacity-30 uppercase flex gap-4">
+                <span>Ctrl+1: 摘錄 | Ctrl+2: Idea | Ctrl+B: 看板 | Ctrl+J: 工坊</span>
             </div>
         </div>
-        <div class="flex items-center gap-3">
-            <div id="syncState" class="w-2 h-2 rounded-full border border-black"></div>
-            <button onclick="toggleStudio()" class="text-[10px] font-black border-2 border-black px-3 py-1 hover:invert">STUDIO MODE</button>
-            <button onclick="authDropbox()" class="text-[10px] font-black underline">DBX</button>
+        <div class="flex gap-4">
+            <button onclick="toggleBoard(true)" class="text-[10px] font-black border-2 border-black px-3 py-1">BOARD</button>
+            <button onclick="toggleStudio()" class="text-[10px] font-black bg-black text-white px-3 py-1">STUDIO</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         
-        <aside id="libSide" class="sidebar-hidden w-72 border-r-2 border-black bg-white transition-all-custom flex flex-col">
-            <div class="p-4 border-b border-zinc-100 flex flex-col gap-2">
-                <p class="text-[9px] font-black uppercase opacity-40">Review Radar</p>
-                <div class="grid grid-cols-3 gap-1">
-                    <button onclick="filterReview('1w')" class="border border-black text-[9px] font-black py-1">1W</button>
-                    <button onclick="filterReview('1m')" class="border border-black text-[9px] font-black py-1">1M</button>
-                    <button onclick="filterReview('3m')" class="border border-black text-[9px] font-black py-1">3M</button>
-                </div>
+        <aside id="libSide" class="sidebar-hidden w-64 border-r-4 border-black bg-white transition-custom flex flex-col">
+            <div class="p-4 bg-black text-white text-[10px] font-black uppercase tracking-widest">Storage Boxes</div>
+            <div class="flex-1 overflow-y-auto no-scrollbar">
+                <div class="idx-item flex justify-between" onclick="filterBoardByMode('摘錄')"><span>摘錄盒</span><span id="count-quote" class="mono opacity-50">0</span></div>
+                <div class="idx-item flex justify-between" onclick="filterBoardByMode('Idea')"><span>Idea 盒</span><span id="count-idea" class="mono opacity-50">0</span></div>
+                <div class="p-3 bg-zinc-100 text-[9px] font-black uppercase border-b-2 border-black">Time Archive</div>
+                <div id="timeIndex"></div>
+                <div class="p-3 bg-zinc-100 text-[9px] font-black uppercase border-b-2 border-black">Keywords</div>
+                <div id="tagIndex"></div>
             </div>
-            <div class="p-4 bg-zinc-50 text-[9px] font-black uppercase">Time Archive</div>
-            <div id="timeIndex" class="flex-1 overflow-y-auto no-scrollbar"></div>
-            <div class="p-4 bg-zinc-50 text-[9px] font-black uppercase border-t border-zinc-200">Keywords</div>
-            <div id="tagIndex" class="h-1/3 overflow-y-auto no-scrollbar"></div>
         </aside>
 
-        <main class="flex-1 flex flex-col items-center pt-16 bg-zinc-50 overflow-y-auto px-6 relative">
-            <div id="editorContainer" class="max-w-2xl w-full transition-all">
-                <div class="bg-white border-4 border-black p-8 shadow-[12px_12px_0_0_#000] relative">
-                    <div class="flex justify-between items-center mb-6 border-b-2 border-zinc-100 pb-2">
-                        <span id="activeId" class="mono font-black text-2xl text-zinc-200">#NEW</span>
-                        <div class="flex gap-2">
-                            <button onclick="setMode('Idea')" id="mode-Idea" class="text-[10px] font-black border border-black px-2">IDEA</button>
-                            <button onclick="setMode('摘錄')" id="mode-摘錄" class="text-[10px] font-black border border-black px-2">QUOTE</button>
-                        </div>
+        <main class="flex-1 flex flex-col items-center pt-20 bg-zinc-50 overflow-y-auto px-6 relative">
+            <div class="max-w-2xl w-full">
+                <div class="bg-white border-4 border-black p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)]">
+                    <div class="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
+                        <span id="activeId" class="mono font-black text-2xl">#NEW</span>
+                        <div id="modeBadge" class="hidden bg-black text-white px-3 py-1 text-[10px] font-black uppercase"></div>
                     </div>
-                    <textarea id="mainEditor" class="w-full h-72 text-xl outline-none leading-relaxed resize-none" placeholder="Start thinking..."></textarea>
+                    <textarea id="mainEditor" class="w-full h-80 text-xl outline-none leading-relaxed resize-none" placeholder="輸入新的思考..."></textarea>
                     <div class="mt-6 flex justify-between items-center">
-                        <button onclick="saveCard()" class="bg-black text-white px-10 py-3 text-xs font-900 uppercase tracking-widest">File to Vault</button>
-                        <div id="saveToast" class="text-[10px] font-black opacity-0 transition-opacity uppercase italic">Saved!</div>
+                        <button onclick="saveCard()" class="bg-black text-white px-10 py-3 text-xs font-900 uppercase">Save to Vault</button>
+                        <div class="text-right mono text-[9px] font-bold opacity-30 uppercase" id="timestamp">Pending...</div>
                     </div>
                 </div>
             </div>
         </main>
 
-        <aside id="studioSide" class="sidebar-hidden w-[500px] border-l-4 border-black bg-white transition-all-custom flex flex-col">
-            <div class="p-4 border-b-2 border-black flex justify-between items-center bg-zinc-50">
-                <h3 class="text-xs font-black uppercase tracking-tighter">Project Output Studio</h3>
-                <div class="flex gap-2">
-                    <button onclick="exportProject()" class="text-[9px] font-black bg-black text-white px-2 py-1">EXPORT MD</button>
-                </div>
+        <aside id="studioSide" class="sidebar-hidden w-[500px] border-l-4 border-black bg-white transition-custom flex flex-col">
+            <div class="p-4 border-b-2 border-black flex justify-between bg-zinc-50 items-center">
+                <h3 class="text-xs font-black uppercase">Writing Studio</h3>
+                <button onclick="exportProject()" class="text-[9px] font-black underline">EXPORT .MD</button>
             </div>
-            
-            <div id="studioArea" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-2">
+            <div id="studioArea" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-4">
                 </div>
         </aside>
+    </div>
 
+    <div id="boardLayer" class="hidden fixed inset-0 bg-white z-[200] p-12 overflow-y-auto">
+        <div class="flex justify-between items-center mb-10 border-b-4 border-black pb-4">
+            <h2 class="text-3xl font-900 uppercase">Archive Board</h2>
+            <div id="connTip" class="hidden animate-pulse bg-yellow-400 px-4 py-1 font-black border-2 border-black">選擇第二張卡片建立連結...</div>
+            <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-4">CLOSE</button>
+        </div>
+        <div id="boardContent" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
     </div>
 
 <script>
-    let cards = JSON.parse(localStorage.getItem('zet_v12')) || [];
-    let currentProject = { segments: [] };
+    let cards = JSON.parse(localStorage.getItem('zet_v13')) || [];
     let currentMode = null;
-    let dbx;
+    let connectSourceId = null;
+    let projectSegments = [];
 
     window.onload = () => {
         renderSidebar();
         initShortcuts();
-        initDropbox();
+        setInterval(() => { document.getElementById('timestamp').innerText = new Date().toLocaleTimeString(); }, 1000);
     };
 
     function initShortcuts() {
         document.addEventListener('keydown', e => {
             const ctrl = e.ctrlKey || e.metaKey;
-            if (ctrl && e.key === 'n') { e.preventDefault(); resetEditor(); }
+            if (ctrl && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
+            if (ctrl && e.key === '2') { e.preventDefault(); setMode('Idea'); }
             if (ctrl && e.key === 's') { e.preventDefault(); saveCard(); }
+            if (ctrl && e.key === 'b') { e.preventDefault(); toggleBoard(); }
             if (ctrl && e.key === 'j') { e.preventDefault(); toggleStudio(); }
+            if (ctrl && e.key === 'n') { e.preventDefault(); resetEditor(); }
         });
     }
 
     function setMode(m) {
         currentMode = (currentMode === m) ? null : m;
-        document.querySelectorAll('[id^="mode-"]').forEach(btn => btn.classList.remove('bg-black', 'text-white'));
-        if (currentMode) document.getElementById(`mode-${m}`).classList.add('bg-black', 'text-white');
+        const badge = document.getElementById('modeBadge');
+        if (currentMode) { badge.innerText = currentMode; badge.classList.remove('hidden'); }
+        else { badge.classList.add('hidden'); }
     }
 
     function saveCard() {
         const content = document.getElementById('mainEditor').value.trim();
         if(!content) return;
         const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        const card = {
-            id, fullId: Date.now(), content, 
-            mode: currentMode, time: Date.now(),
+        cards.unshift({
+            id, fullId: Date.now(), content, mode: currentMode, time: Date.now(),
             tags: (content.match(/#[^\s]+/g) || []).map(t => t.substring(1))
-        };
-        cards.unshift(card);
-        syncData();
-        showToast();
+        });
+        localStorage.setItem('zet_v13', JSON.stringify(cards));
         resetEditor();
+        renderSidebar();
     }
 
     function resetEditor() {
         document.getElementById('mainEditor').value = "";
         setMode(null);
-        renderSidebar();
     }
 
     function renderSidebar() {
+        const counts = { '摘錄': 0, 'Idea': 0 };
         const timeline = {};
         const tags = {};
         cards.forEach(c => {
-            const date = new Date(c.time);
-            const key = `${date.getFullYear()} - ${String(date.getMonth()+1).padStart(2,'0')}`;
-            timeline[key] = (timeline[key] || 0) + 1;
+            if(c.mode) counts[c.mode]++;
+            const d = new Date(c.time);
+            const k = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+            timeline[k] = (timeline[k] || 0) + 1;
             c.tags.forEach(t => tags[t] = (tags[t] || 0) + 1);
         });
 
+        document.getElementById('count-quote').innerText = counts['摘錄'];
+        document.getElementById('count-idea').innerText = counts['Idea'];
+
         document.getElementById('timeIndex').innerHTML = Object.entries(timeline).sort((a,b)=>b[0].localeCompare(a[0])).map(([k,v]) => `
-            <div class="p-3 border-b border-zinc-100 flex justify-between cursor-pointer hover:bg-zinc-50" onclick="showArchive('${k}')">
-                <span class="text-[11px] font-bold">${k}</span>
-                <span class="mono text-[10px] opacity-30">${v}</span>
-            </div>
+            <div class="idx-item flex justify-between" onclick="filterBoardByTime('${k}')"><span>${k}</span><span class="opacity-30">${v}</span></div>
         `).join('');
 
         document.getElementById('tagIndex').innerHTML = Object.entries(tags).map(([k,v]) => `
-            <div class="p-3 border-b border-zinc-100 flex justify-between cursor-pointer hover:bg-zinc-50" onclick="showTagArchive('${k}')">
-                <span class="text-[11px] font-bold">#${k}</span>
-                <span class="mono text-[10px] opacity-30">${v}</span>
-            </div>
+            <div class="idx-item flex justify-between" onclick="filterBoardByTag('${k}')"><span>#${k}</span><span class="opacity-30">${v}</span></div>
         `).join('');
+    }
+
+    function toggleBoard(show) {
+        const layer = document.getElementById('boardLayer');
+        if(show === undefined) show = layer.classList.contains('hidden');
+        layer.classList.toggle('hidden', !show);
+        if(show) renderBoard(cards);
     }
 
     function toggleStudio() {
@@ -161,93 +166,86 @@
         document.getElementById('studioSide').classList.toggle('sidebar-hidden');
     }
 
-    function showArchive(key) {
-        const filtered = cards.filter(c => {
-            const d = new Date(c.time);
-            return `${d.getFullYear()} - ${String(d.getMonth()+1).padStart(2,'0')}` === key;
-        });
-        displayShuttle(filtered);
-    }
-
-    function displayShuttle(data) {
-        // 臨時借用 Studio 區顯示搜尋結果，便於 PUSH
-        const area = document.getElementById('studioArea');
-        area.innerHTML = `<p class="text-[10px] font-black opacity-20 mb-4">ARCHIVE RESULTS</p>` + data.map(c => `
-            <div class="p-4 border-2 border-black mb-4 bg-white shadow-[4px_4px_0_0_#000] group">
-                <div class="flex justify-between items-center mb-2">
-                    <span class="mono text-[10px] font-black">#${c.id}</span>
-                    <button onclick="pushToProject('${c.id}')" class="bg-blue-600 text-white text-[9px] px-2 font-black">PUSH TO PROJECT</button>
+    function renderBoard(data) {
+        document.getElementById('boardContent').innerHTML = data.map(c => `
+            <div id="board-card-${c.id}" class="border-4 border-black p-6 bg-white shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col min-h-[250px]">
+                <div class="flex justify-between border-b-2 border-black pb-2 mb-4">
+                    <span class="mono font-black">#${c.id}</span>
+                    <span class="text-[9px] font-black uppercase">${c.mode || 'Zettel'}</span>
                 </div>
-                <div class="text-xs leading-relaxed">${c.content}</div>
+                <div class="text-sm font-bold flex-1">${marked.parse(c.content)}</div>
+                <div class="mt-4 flex justify-between gap-2">
+                    <button onclick="pushToStudio('${c.id}')" class="bg-blue-600 text-white text-[9px] px-2 py-1 font-black">PUSH TO STUDIO</button>
+                    <button onclick="startConnection('${c.id}')" class="bg-black text-white text-[9px] px-2 py-1 font-black">LINK</button>
+                </div>
             </div>
         `).join('');
     }
 
-    function pushToProject(id) {
-        currentProject.segments.push({ type: 'card', id: id });
-        currentProject.segments.push({ type: 'text', content: '' });
-        renderProject();
+    function startConnection(id) {
+        if (!connectSourceId) {
+            connectSourceId = id;
+            document.getElementById(`board-card-${id}`).classList.add('conn-active');
+            document.getElementById('connTip').classList.remove('hidden');
+        } else {
+            if (connectSourceId === id) { resetConnection(); return; }
+            const cardA = cards.find(c => c.id === connectSourceId);
+            const cardB = cards.find(c => c.id === id);
+            cardA.content += `\n\n[[${cardB.id}]]`;
+            cardB.content += `\n\n[[${cardA.id}]]`;
+            localStorage.setItem('zet_v13', JSON.stringify(cards));
+            resetConnection(); renderBoard(cards);
+        }
     }
 
-    function renderProject() {
+    function resetConnection() {
+        if(connectSourceId) document.getElementById(`board-card-${connectSourceId}`).classList.remove('conn-active');
+        connectSourceId = null; document.getElementById('connTip').classList.add('hidden');
+    }
+
+    function pushToStudio(id) {
+        projectSegments.push({ type: 'card', id: id });
+        projectSegments.push({ type: 'text', content: '' });
+        renderStudio();
+        alert(`卡片 #${id} 已送至工坊`);
+    }
+
+    function renderStudio() {
         const area = document.getElementById('studioArea');
-        area.innerHTML = currentProject.segments.map((seg, idx) => {
+        area.innerHTML = projectSegments.map((seg, idx) => {
             if(seg.type === 'card') {
                 const c = cards.find(x => x.id === seg.id);
-                return `
-                    <div class="studio-block bg-zinc-100 p-4 border border-zinc-200 mb-2 relative group">
-                        <div class="text-[8px] font-black opacity-30 mb-1 uppercase">Reference [[${c.id}]]</div>
-                        <div class="text-[11px] italic opacity-60">${c.content.substring(0,120)}...</div>
-                        <button onclick="removeSeg(${idx})" class="absolute right-2 top-2 hidden group-hover:block text-red-500 text-[9px]">REMOVE</button>
-                    </div>
-                `;
+                return `<div class="p-4 bg-zinc-100 border-2 border-black text-xs italic opacity-70 relative group">
+                    <div class="font-black mb-1">REFERENCE [[${c.id}]]</div>
+                    ${c.content.substring(0,100)}...
+                    <button onclick="projectSegments.splice(${idx},1);renderStudio();" class="absolute right-2 top-2 hidden group-hover:block text-red-500 font-black">X</button>
+                </div>`;
             } else {
-                return `
-                    <div class="studio-block mb-4">
-                        <textarea oninput="currentProject.segments[${idx}].content = this.value" 
-                            class="w-full min-h-[100px] text-sm outline-none bg-transparent resize-none leading-relaxed"
-                            placeholder="在這裡串聯你的想法，寫下新的推論...">${seg.content}</textarea>
-                    </div>
-                `;
+                return `<textarea oninput="projectSegments[${idx}].content=this.value" class="w-full min-h-[100px] text-sm outline-none bg-transparent border-b border-zinc-200" placeholder="在此處寫下新的銜接想法...">${seg.content}</textarea>`;
             }
         }).join('');
     }
 
-    function removeSeg(i) { currentProject.segments.splice(i,1); renderProject(); }
+    function filterBoardByMode(m) { toggleBoard(true); renderBoard(cards.filter(c => c.mode === m)); }
+    function filterBoardByTag(t) { toggleBoard(true); renderBoard(cards.filter(c => c.tags.includes(t))); }
+    function filterBoardByTime(k) { 
+        toggleBoard(true); 
+        renderBoard(cards.filter(c => {
+            const d = new Date(c.time);
+            return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === k;
+        })); 
+    }
 
     function exportProject() {
-        let md = `# ${new Date().toLocaleDateString()} Project Export\n\n`;
-        currentProject.segments.forEach(s => {
+        let md = "# Project Output\n\n";
+        projectSegments.forEach(s => {
             if(s.type === 'card') md += `\n> ${cards.find(x => x.id === s.id).content}\n\n`;
             else md += s.content + "\n";
         });
         const a = document.createElement('a');
         a.href = URL.createObjectURL(new Blob([md]));
-        a.download = `Studio_Project_${Date.now()}.md`;
+        a.download = `Studio_Export_${Date.now()}.md`;
         a.click();
-    }
-
-    function syncData() {
-        localStorage.setItem('zet_v12', JSON.stringify(cards));
-        if (dbx) dbx.filesUpload({ path: '/zet_backup.json', contents: JSON.stringify(cards), mode: 'overwrite' });
-    }
-
-    function showToast() {
-        const t = document.getElementById('saveToast');
-        t.style.opacity = 1;
-        setTimeout(() => t.style.opacity = 0, 2000);
-    }
-
-    function initDropbox() {
-        const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
-        if (token) {
-            dbx = new Dropbox.Dropbox({ accessToken: token });
-            document.getElementById('syncState').classList.add('bg-green-500');
-            window.location.hash = "";
-        }
-    }
-    function authDropbox() {
-        window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=r8nisc7hr8cta77&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`;
     }
 </script>
 </body>
