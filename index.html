@@ -2,182 +2,252 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>MyZettelSync | Studio 工作坊</title>
+    <title>ZettelSync | Ultimate Studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Inter:wght@400;900&display=swap');
-        body { font-family: 'Inter', sans-serif; background: #f4f4f5; color: #000; height: 100vh; overflow: hidden; }
+        body { font-family: 'Inter', sans-serif; background: #fafafa; height: 100vh; overflow: hidden; }
         .mono { font-family: 'JetBrains Mono', monospace; }
+        .sidebar-hidden { width: 0 !important; opacity: 0; pointer-events: none; border: none !important; }
+        .transition-all-custom { transition: all 0.4s cubic-bezier(0.19, 1, 0.22, 1); }
+        .studio-block { border-left: 3px solid transparent; transition: 0.2s; }
+        .studio-block:hover { border-left: 3px solid #000; background: #fff; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        /* 項目區塊動畫 */
-        .studio-block { border-left: 4px solid transparent; transition: 0.2s; }
-        .studio-block:hover { border-left: 4px solid #000; background: #fff; }
     </style>
 </head>
 <body class="flex flex-col">
 
-    <header class="h-14 border-b-4 border-black flex items-center justify-between px-6 bg-white z-[100]">
+    <header class="h-12 flex items-center justify-between px-6 bg-white border-b-2 border-black z-[100]">
         <div class="flex items-center gap-6">
-            <h1 class="text-lg font-900 tracking-tighter uppercase">Zettel Studio</h1>
-            <nav class="flex gap-4 text-[10px] font-black uppercase">
-                <button onclick="switchView('library')" class="hover:underline">Library</button>
-                <button onclick="switchView('studio')" class="hover:underline text-blue-600">Writing Studio</button>
-            </nav>
+            <h1 class="text-sm font-900 uppercase">ZettelSync <span class="text-[10px] opacity-30">v12</span></h1>
+            <div class="hidden md:flex gap-4 text-[9px] font-black opacity-40 uppercase">
+                <span>Ctrl+N: New</span><span>Ctrl+S: Save</span><span>Ctrl+J: Studio</span>
+            </div>
         </div>
-        <div id="syncStatus" class="flex gap-2 items-center">
-            <button onclick="exportProject()" class="text-[9px] border-2 border-black px-2 py-1 font-black">EXPORT PROJECT</button>
-            <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+        <div class="flex items-center gap-3">
+            <div id="syncState" class="w-2 h-2 rounded-full border border-black"></div>
+            <button onclick="toggleStudio()" class="text-[10px] font-black border-2 border-black px-3 py-1 hover:invert">STUDIO MODE</button>
+            <button onclick="authDropbox()" class="text-[10px] font-black underline">DBX</button>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         
-        <aside class="w-64 border-r-2 border-zinc-300 flex flex-col bg-white">
-            <div class="p-4 border-b-2 border-black">
-                <input type="text" placeholder="搜尋卡片加入項目..." class="w-full text-xs outline-none">
-            </div>
-            <div id="libraryList" class="flex-1 overflow-y-auto no-scrollbar">
+        <aside id="libSide" class="sidebar-hidden w-72 border-r-2 border-black bg-white transition-all-custom flex flex-col">
+            <div class="p-4 border-b border-zinc-100 flex flex-col gap-2">
+                <p class="text-[9px] font-black uppercase opacity-40">Review Radar</p>
+                <div class="grid grid-cols-3 gap-1">
+                    <button onclick="filterReview('1w')" class="border border-black text-[9px] font-black py-1">1W</button>
+                    <button onclick="filterReview('1m')" class="border border-black text-[9px] font-black py-1">1M</button>
+                    <button onclick="filterReview('3m')" class="border border-black text-[9px] font-black py-1">3M</button>
                 </div>
+            </div>
+            <div class="p-4 bg-zinc-50 text-[9px] font-black uppercase">Time Archive</div>
+            <div id="timeIndex" class="flex-1 overflow-y-auto no-scrollbar"></div>
+            <div class="p-4 bg-zinc-50 text-[9px] font-black uppercase border-t border-zinc-200">Keywords</div>
+            <div id="tagIndex" class="h-1/3 overflow-y-auto no-scrollbar"></div>
         </aside>
 
-        <section id="shuttleArea" class="w-1/3 border-r-2 border-zinc-300 bg-zinc-50 overflow-y-auto p-6">
-            <div class="mb-6 flex justify-between items-center">
-                <h3 class="text-xs font-black uppercase opacity-40">Review & Selection</h3>
-                <div class="flex gap-2">
-                    <button onclick="loadReview('1w')" class="text-[8px] border border-black px-1">1W</button>
-                    <button onclick="loadReview('1m')" class="text-[8px] border border-black px-1">1M</button>
-                </div>
-            </div>
-            <div id="shuttleCards" class="space-y-4">
-                </div>
-        </section>
-
-        <main class="flex-1 bg-white flex flex-col overflow-hidden">
-            <div class="h-12 border-b-2 border-zinc-100 flex items-center px-6 gap-4">
-                <select id="projectSelector" onchange="loadProject()" class="text-xs font-black outline-none bg-transparent">
-                    <option>2025 新論文項目</option>
-                    <option>未命名小說</option>
-                </select>
-                <button class="text-[18px] font-light">+</button>
-            </div>
-
-            <div id="studioCanvas" class="flex-1 overflow-y-auto p-12 no-scrollbar">
-                <div class="max-w-xl mx-auto space-y-2" id="projectBlocks">
-                    <div class="text-center py-20">
-                        <p class="text-zinc-300 font-900 text-xs uppercase tracking-widest">從左側或中間將卡片<br>傳送到這裡開始創作</p>
+        <main class="flex-1 flex flex-col items-center pt-16 bg-zinc-50 overflow-y-auto px-6 relative">
+            <div id="editorContainer" class="max-w-2xl w-full transition-all">
+                <div class="bg-white border-4 border-black p-8 shadow-[12px_12px_0_0_#000] relative">
+                    <div class="flex justify-between items-center mb-6 border-b-2 border-zinc-100 pb-2">
+                        <span id="activeId" class="mono font-black text-2xl text-zinc-200">#NEW</span>
+                        <div class="flex gap-2">
+                            <button onclick="setMode('Idea')" id="mode-Idea" class="text-[10px] font-black border border-black px-2">IDEA</button>
+                            <button onclick="setMode('摘錄')" id="mode-摘錄" class="text-[10px] font-black border border-black px-2">QUOTE</button>
+                        </div>
+                    </div>
+                    <textarea id="mainEditor" class="w-full h-72 text-xl outline-none leading-relaxed resize-none" placeholder="Start thinking..."></textarea>
+                    <div class="mt-6 flex justify-between items-center">
+                        <button onclick="saveCard()" class="bg-black text-white px-10 py-3 text-xs font-900 uppercase tracking-widest">File to Vault</button>
+                        <div id="saveToast" class="text-[10px] font-black opacity-0 transition-opacity uppercase italic">Saved!</div>
                     </div>
                 </div>
             </div>
         </main>
+
+        <aside id="studioSide" class="sidebar-hidden w-[500px] border-l-4 border-black bg-white transition-all-custom flex flex-col">
+            <div class="p-4 border-b-2 border-black flex justify-between items-center bg-zinc-50">
+                <h3 class="text-xs font-black uppercase tracking-tighter">Project Output Studio</h3>
+                <div class="flex gap-2">
+                    <button onclick="exportProject()" class="text-[9px] font-black bg-black text-white px-2 py-1">EXPORT MD</button>
+                </div>
+            </div>
+            
+            <div id="studioArea" class="flex-1 overflow-y-auto p-8 no-scrollbar space-y-2">
+                </div>
+        </aside>
+
     </div>
 
 <script>
-    // 數據模擬
-    let cards = JSON.parse(localStorage.getItem('zet_v10')) || [];
-    let currentProject = {
-        title: "2025 新論文項目",
-        segments: [] // {type: 'card', id: '...'} or {type: 'text', content: '...'}
-    };
+    let cards = JSON.parse(localStorage.getItem('zet_v12')) || [];
+    let currentProject = { segments: [] };
+    let currentMode = null;
+    let dbx;
 
     window.onload = () => {
-        renderLibrary();
-        renderStudio();
+        renderSidebar();
+        initShortcuts();
+        initDropbox();
     };
 
-    function renderLibrary() {
-        const list = document.getElementById('libraryList');
-        list.innerHTML = cards.map(c => `
-            <div class="p-4 border-b border-zinc-100 hover:bg-zinc-50 cursor-pointer group" onclick="addToShuttle('${c.fullId}')">
-                <div class="flex justify-between items-center mb-1">
-                    <span class="mono text-[9px] font-black">#${c.id}</span>
-                    <span class="text-[8px] uppercase opacity-30">${c.mode || ''}</span>
-                </div>
-                <div class="text-[11px] line-clamp-2 font-bold">${c.content.substring(0,60)}</div>
+    function initShortcuts() {
+        document.addEventListener('keydown', e => {
+            const ctrl = e.ctrlKey || e.metaKey;
+            if (ctrl && e.key === 'n') { e.preventDefault(); resetEditor(); }
+            if (ctrl && e.key === 's') { e.preventDefault(); saveCard(); }
+            if (ctrl && e.key === 'j') { e.preventDefault(); toggleStudio(); }
+        });
+    }
+
+    function setMode(m) {
+        currentMode = (currentMode === m) ? null : m;
+        document.querySelectorAll('[id^="mode-"]').forEach(btn => btn.classList.remove('bg-black', 'text-white'));
+        if (currentMode) document.getElementById(`mode-${m}`).classList.add('bg-black', 'text-white');
+    }
+
+    function saveCard() {
+        const content = document.getElementById('mainEditor').value.trim();
+        if(!content) return;
+        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+        const card = {
+            id, fullId: Date.now(), content, 
+            mode: currentMode, time: Date.now(),
+            tags: (content.match(/#[^\s]+/g) || []).map(t => t.substring(1))
+        };
+        cards.unshift(card);
+        syncData();
+        showToast();
+        resetEditor();
+    }
+
+    function resetEditor() {
+        document.getElementById('mainEditor').value = "";
+        setMode(null);
+        renderSidebar();
+    }
+
+    function renderSidebar() {
+        const timeline = {};
+        const tags = {};
+        cards.forEach(c => {
+            const date = new Date(c.time);
+            const key = `${date.getFullYear()} - ${String(date.getMonth()+1).padStart(2,'0')}`;
+            timeline[key] = (timeline[key] || 0) + 1;
+            c.tags.forEach(t => tags[t] = (tags[t] || 0) + 1);
+        });
+
+        document.getElementById('timeIndex').innerHTML = Object.entries(timeline).sort((a,b)=>b[0].localeCompare(a[0])).map(([k,v]) => `
+            <div class="p-3 border-b border-zinc-100 flex justify-between cursor-pointer hover:bg-zinc-50" onclick="showArchive('${k}')">
+                <span class="text-[11px] font-bold">${k}</span>
+                <span class="mono text-[10px] opacity-30">${v}</span>
+            </div>
+        `).join('');
+
+        document.getElementById('tagIndex').innerHTML = Object.entries(tags).map(([k,v]) => `
+            <div class="p-3 border-b border-zinc-100 flex justify-between cursor-pointer hover:bg-zinc-50" onclick="showTagArchive('${k}')">
+                <span class="text-[11px] font-bold">#${k}</span>
+                <span class="mono text-[10px] opacity-30">${v}</span>
             </div>
         `).join('');
     }
 
-    function addToShuttle(fid) {
-        const c = cards.find(x => x.fullId == fid);
-        const container = document.getElementById('shuttleCards');
-        const cardHtml = `
-            <div class="bg-white border-2 border-black p-4 shadow-[4px_4px_0_0_#000] relative">
-                <div class="text-[10px] font-black mb-2">#${c.id}</div>
-                <div class="text-xs leading-relaxed mb-4">${marked.parse(c.content)}</div>
-                <button onclick="pushToStudio('${c.id}')" class="w-full bg-blue-600 text-white text-[9px] font-black py-1 uppercase hover:bg-black transition">
-                    🚀 傳送到項目 (Push to Studio)
-                </button>
+    function toggleStudio() {
+        document.getElementById('libSide').classList.toggle('sidebar-hidden');
+        document.getElementById('studioSide').classList.toggle('sidebar-hidden');
+    }
+
+    function showArchive(key) {
+        const filtered = cards.filter(c => {
+            const d = new Date(c.time);
+            return `${d.getFullYear()} - ${String(d.getMonth()+1).padStart(2,'0')}` === key;
+        });
+        displayShuttle(filtered);
+    }
+
+    function displayShuttle(data) {
+        // 臨時借用 Studio 區顯示搜尋結果，便於 PUSH
+        const area = document.getElementById('studioArea');
+        area.innerHTML = `<p class="text-[10px] font-black opacity-20 mb-4">ARCHIVE RESULTS</p>` + data.map(c => `
+            <div class="p-4 border-2 border-black mb-4 bg-white shadow-[4px_4px_0_0_#000] group">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="mono text-[10px] font-black">#${c.id}</span>
+                    <button onclick="pushToProject('${c.id}')" class="bg-blue-600 text-white text-[9px] px-2 font-black">PUSH TO PROJECT</button>
+                </div>
+                <div class="text-xs leading-relaxed">${c.content}</div>
             </div>
-        `;
-        container.innerHTML = cardHtml + container.innerHTML;
+        `).join('');
     }
 
-    // 傳送到項目右側
-    function pushToStudio(id) {
+    function pushToProject(id) {
         currentProject.segments.push({ type: 'card', id: id });
-        // 自動在卡片後加一個文字區塊，方便寫過渡段
         currentProject.segments.push({ type: 'text', content: '' });
-        renderStudio();
+        renderProject();
     }
 
-    function renderStudio() {
-        const canvas = document.getElementById('projectBlocks');
-        if (currentProject.segments.length === 0) return;
-
-        canvas.innerHTML = currentProject.segments.map((seg, idx) => {
-            if (seg.type === 'card') {
-                const cardData = cards.find(c => c.id === seg.id);
+    function renderProject() {
+        const area = document.getElementById('studioArea');
+        area.innerHTML = currentProject.segments.map((seg, idx) => {
+            if(seg.type === 'card') {
+                const c = cards.find(x => x.id === seg.id);
                 return `
-                    <div class="studio-block p-4 bg-zinc-50 border border-zinc-200 opacity-60 relative group">
-                        <span class="absolute -left-8 top-4 text-[8px] font-black opacity-20">REF</span>
-                        <div class="text-[10px] font-black border-b border-zinc-200 mb-2 pb-1">[[${cardData.id}]]</div>
-                        <div class="text-xs italic">${cardData.content.substring(0,100)}...</div>
-                        <button onclick="removeSegment(${idx})" class="absolute right-2 top-2 hidden group-hover:block text-[10px] text-red-500">REMOVE</button>
+                    <div class="studio-block bg-zinc-100 p-4 border border-zinc-200 mb-2 relative group">
+                        <div class="text-[8px] font-black opacity-30 mb-1 uppercase">Reference [[${c.id}]]</div>
+                        <div class="text-[11px] italic opacity-60">${c.content.substring(0,120)}...</div>
+                        <button onclick="removeSeg(${idx})" class="absolute right-2 top-2 hidden group-hover:block text-red-500 text-[9px]">REMOVE</button>
                     </div>
                 `;
             } else {
                 return `
-                    <div class="studio-block p-4 relative group">
-                        <span class="absolute -left-8 top-4 text-[8px] font-black opacity-20 text-blue-600">WRITE</span>
-                        <textarea oninput="updateSegment(${idx}, this.value)" 
-                            class="w-full min-h-[80px] text-sm leading-relaxed outline-none bg-transparent resize-none placeholder-zinc-200"
-                            placeholder="在這裡輸入過渡段落或新的想法...">${seg.content}</textarea>
+                    <div class="studio-block mb-4">
+                        <textarea oninput="currentProject.segments[${idx}].content = this.value" 
+                            class="w-full min-h-[100px] text-sm outline-none bg-transparent resize-none leading-relaxed"
+                            placeholder="在這裡串聯你的想法，寫下新的推論...">${seg.content}</textarea>
                     </div>
                 `;
             }
         }).join('');
     }
 
-    function updateSegment(idx, val) {
-        currentProject.segments[idx].content = val;
-    }
-
-    function removeSegment(idx) {
-        currentProject.segments.splice(idx, 1);
-        renderStudio();
-    }
+    function removeSeg(i) { currentProject.segments.splice(i,1); renderProject(); }
 
     function exportProject() {
-        let finalOutput = `# ${currentProject.title}\n\n`;
-        currentProject.segments.forEach(seg => {
-            if (seg.type === 'card') {
-                const c = cards.find(x => x.id === seg.id);
-                finalOutput += `\n> ${c.content}\n\n`;
-            } else {
-                finalOutput += seg.content + "\n";
-            }
+        let md = `# ${new Date().toLocaleDateString()} Project Export\n\n`;
+        currentProject.segments.forEach(s => {
+            if(s.type === 'card') md += `\n> ${cards.find(x => x.id === s.id).content}\n\n`;
+            else md += s.content + "\n";
         });
-        const blob = new Blob([finalOutput], {type: 'text/markdown'});
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `${currentProject.title}.md`;
+        a.href = URL.createObjectURL(new Blob([md]));
+        a.download = `Studio_Project_${Date.now()}.md`;
         a.click();
     }
 
-    function switchView(v) {
-        // 切換介面邏輯
-        alert("切換到 " + v + " 視圖（已在當前並行顯示）");
+    function syncData() {
+        localStorage.setItem('zet_v12', JSON.stringify(cards));
+        if (dbx) dbx.filesUpload({ path: '/zet_backup.json', contents: JSON.stringify(cards), mode: 'overwrite' });
+    }
+
+    function showToast() {
+        const t = document.getElementById('saveToast');
+        t.style.opacity = 1;
+        setTimeout(() => t.style.opacity = 0, 2000);
+    }
+
+    function initDropbox() {
+        const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
+        if (token) {
+            dbx = new Dropbox.Dropbox({ accessToken: token });
+            document.getElementById('syncState').classList.add('bg-green-500');
+            window.location.hash = "";
+        }
+    }
+    function authDropbox() {
+        window.location.href = `https://www.dropbox.com/oauth2/authorize?client_id=r8nisc7hr8cta77&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`;
     }
 </script>
 </body>
