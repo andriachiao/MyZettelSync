@@ -101,7 +101,7 @@
 
     // 1. Dropbox OAuth 流程
     function authDropbox() {
-        const dbxAuth = new Dropbox.DropboxAuth({ clientId: CLIENT_ID });
+        const dbxAuth = new Dropbox.DropboxAuth({ clientId: 2zshj5fwkxe18e6 });
         const authUrl = dbxAuth.getAuthenticationUrl(window.location.href);
         window.location.href = authUrl;
     }
