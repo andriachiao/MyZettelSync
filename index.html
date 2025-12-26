@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>MyZettelSync | 雙點連線版</title>
+    <title>MyZettelSync | 生產力終結版</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dropbox.js/10.34.0/Dropbox-sdk.min.js"></script>
@@ -22,14 +22,19 @@
     <header class="h-16 border-b-4 border-black flex items-center justify-between px-8 bg-white z-[70]">
         <h1 class="text-xl font-900 tracking-tighter uppercase">MyZettelSync</h1>
         <div class="flex gap-4 items-center">
-            <button onclick="authDropbox()" class="text-[10px] font-black border-2 border-black px-3 py-1 uppercase">Connect Dropbox</button>
+            <div class="flex border-2 border-black">
+                <button onclick="exportMD()" class="text-[9px] font-black px-2 py-1 border-r-2 border-black hover:bg-black hover:text-white">MD</button>
+                <button onclick="exportCSV()" class="text-[9px] font-black px-2 py-1 border-r-2 border-black hover:bg-black hover:text-white">CSV</button>
+                <button onclick="manualBackup()" class="text-[9px] font-black px-2 py-1 hover:bg-black hover:text-white">JSON</button>
+            </div>
+            <button onclick="authDropbox()" class="text-[10px] font-black border-2 border-black px-3 py-1 uppercase">Dropbox</button>
             <div id="syncIndicator" class="w-3 h-3 border-2 border-black rounded-full"></div>
         </div>
     </header>
 
     <div class="flex flex-1 overflow-hidden">
         <aside class="w-64 border-r-4 border-black flex flex-col shrink-0 bg-white">
-            <div class="p-4 bg-black text-white text-[10px] font-black uppercase tracking-widest">Category Boxes</div>
+            <div class="p-4 bg-black text-white text-[10px] font-black uppercase">Storage Boxes</div>
             <div id="boxContainer" class="flex-1 overflow-y-auto no-scrollbar">
                 <div class="idx-item flex justify-between" onclick="filterBoardByMode('摘錄')"><span>摘錄盒</span><span id="count-quote" class="mono opacity-50">0</span></div>
                 <div class="idx-item flex justify-between" onclick="filterBoardByMode('Idea')"><span>Idea 盒</span><span id="count-idea" class="mono opacity-50">0</span></div>
@@ -42,21 +47,25 @@
             <div class="max-w-2xl w-full mx-auto space-y-6">
                 <div class="bg-white border-4 border-black p-8 shadow-[10px_10px_0px_0px_rgba(0,0,0,1)] relative">
                     <div class="flex justify-between items-center mb-6 border-b-2 border-black pb-4">
-                        <span id="activeId" class="mono font-black text-2xl">#NEW</span>
+                        <div class="flex items-center gap-3">
+                            <span id="activeId" class="mono font-black text-2xl">#NEW</span>
+                            <span id="editBadge" class="hidden text-[10px] bg-yellow-400 px-2 py-0.5 font-black border border-black">EDITING</span>
+                        </div>
                         <span id="activeMode" class="bg-black text-white px-3 py-1 text-[10px] font-black hidden uppercase"></span>
                     </div>
                     
-                    <textarea id="cardInput" oninput="liveLinkPreview()" class="w-full h-64 text-2xl outline-none leading-relaxed placeholder-zinc-100" placeholder="寫入思考..."></textarea>
+                    <textarea id="cardInput" oninput="liveLinkPreview()" class="w-full h-80 text-2xl outline-none leading-relaxed placeholder-zinc-100" placeholder="寫入內容..."></textarea>
                     
                     <div id="livePreview" class="mt-4 p-4 border-2 border-dashed border-zinc-300 hidden">
-                        <p class="text-[9px] font-black text-zinc-400 uppercase mb-2">Link Preview</p>
                         <div id="previewContent" class="text-xs font-bold opacity-60"></div>
                     </div>
 
-                    <div id="editTimestamp" class="text-right mono text-[9px] font-bold opacity-30 mt-4 uppercase">Pending...</div>
-                    <div class="mt-6 flex justify-between">
-                        <button onclick="saveCard()" class="bg-black text-white px-8 py-3 font-900 text-xs uppercase">File Card</button>
-                        <button onclick="toggleBoard(true)" class="border-2 border-black px-6 py-3 font-900 text-xs uppercase">Open Board</button>
+                    <div class="mt-8 flex justify-between items-center">
+                        <div class="flex gap-4">
+                            <button onclick="saveCard()" id="saveBtn" class="bg-black text-white px-8 py-3 font-900 text-xs uppercase">File Card</button>
+                            <button onclick="toggleBoard(true)" class="border-2 border-black px-6 py-3 font-900 text-xs uppercase">Board</button>
+                        </div>
+                        <button onclick="resetEditor()" class="text-[10px] font-black underline opacity-30">CLEAR</button>
                     </div>
                 </div>
             </div>
@@ -65,17 +74,18 @@
 
     <div id="boardLayer" class="hidden fixed inset-0 bg-white z-[100] p-12 overflow-y-auto">
         <div class="flex justify-between items-center mb-10 border-b-4 border-black pb-4">
-            <h2 id="boardTitle" class="text-3xl font-900 uppercase">Archive Board</h2>
-            <div id="connTip" class="hidden animate-pulse bg-yellow-400 px-4 py-1 font-black text-sm border-2 border-black">請選擇第二張卡片建立連結...</div>
+            <h2 class="text-3xl font-900 uppercase">Knowledge Board</h2>
+            <div id="connTip" class="hidden animate-pulse bg-yellow-400 px-4 py-1 font-black border-2 border-black">選擇第二張卡片...</div>
             <button onclick="toggleBoard(false)" class="font-black border-2 border-black px-4">CLOSE</button>
         </div>
         <div id="boardContent" class="grid grid-cols-1 md:grid-cols-3 gap-8"></div>
     </div>
 
 <script>
-    let cards = JSON.parse(localStorage.getItem('zet_v8')) || [];
+    let cards = JSON.parse(localStorage.getItem('zet_v9')) || [];
     let currentMode = null;
-    let connectSourceId = null; // 用於兩點連線
+    let editingFullId = null;
+    let connectSourceId = null;
     let dbx;
 
     window.onload = () => {
@@ -86,7 +96,7 @@
 
     function initShortcuts() {
         document.addEventListener('keydown', e => {
-            const cmdShift = e.metaKey && e.shiftKey;
+            const cmdShift = (e.metaKey || e.ctrlKey) && e.shiftKey;
             if (cmdShift && e.key === '1') { e.preventDefault(); setMode('摘錄'); }
             if (cmdShift && e.key === '2') { e.preventDefault(); setMode('Idea'); }
             if (cmdShift && e.key === 's') { e.preventDefault(); saveCard(); }
@@ -96,40 +106,52 @@
     function setMode(m) {
         currentMode = (currentMode === m) ? null : m;
         const tag = document.getElementById('activeMode');
-        tag.innerText = currentMode ? currentMode : "";
+        tag.innerText = currentMode || "";
         tag.classList.toggle('hidden', !currentMode);
-    }
-
-    // 即時連結預覽邏輯
-    function liveLinkPreview() {
-        const val = document.getElementById('cardInput').value;
-        const match = val.match(/\[\[([A-Z0-9]{4})\]\]/);
-        const preview = document.getElementById('livePreview');
-        if (match) {
-            const target = cards.find(c => c.id === match[1]);
-            if (target) {
-                preview.classList.remove('hidden');
-                document.getElementById('previewContent').innerText = `Linking to #${target.id}: ${target.content.substring(0,60)}...`;
-                return;
-            }
-        }
-        preview.classList.add('hidden');
     }
 
     function saveCard() {
         const content = document.getElementById('cardInput').value.trim();
         if(!content) return;
-        const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
-        const tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
-        
-        const card = { id, fullId: Date.now(), content, tags, mode: currentMode, time: Date.now() };
-        cards.unshift(card);
-        localStorage.setItem('zet_v8', JSON.stringify(cards));
-        
-        document.getElementById('cardInput').value = "";
-        setMode(null);
+
+        if (editingFullId) {
+            // 修改現有卡片
+            const idx = cards.findIndex(c => c.fullId === editingFullId);
+            cards[idx].content = content;
+            cards[idx].tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
+            cards[idx].mode = currentMode;
+            editingFullId = null;
+        } else {
+            // 建立新卡片
+            const id = (Math.floor(Date.now() / 1000) % 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+            const tags = (content.match(/#[^\s]+/g) || []).map(t => t.substring(1));
+            cards.unshift({ id, fullId: Date.now(), content, tags, mode: currentMode, time: Date.now() });
+        }
+
+        localStorage.setItem('zet_v9', JSON.stringify(cards));
+        resetEditor();
         renderSidebar();
         uploadToDropbox();
+    }
+
+    function resetEditor() {
+        document.getElementById('cardInput').value = "";
+        document.getElementById('activeId').innerText = "#NEW";
+        document.getElementById('editBadge').classList.add('hidden');
+        document.getElementById('saveBtn').innerText = "File Card";
+        editingFullId = null;
+        setMode(null);
+    }
+
+    function loadToEdit(fid) {
+        const card = cards.find(c => c.fullId == fid);
+        editingFullId = card.fullId;
+        document.getElementById('cardInput').value = card.content;
+        document.getElementById('activeId').innerText = "#" + card.id;
+        document.getElementById('editBadge').classList.remove('hidden');
+        document.getElementById('saveBtn').innerText = "Update Card";
+        setMode(card.mode);
+        toggleBoard(false);
     }
 
     function renderSidebar() {
@@ -141,18 +163,11 @@
         });
         document.getElementById('count-quote').innerText = counts['摘錄'];
         document.getElementById('count-idea').innerText = counts['Idea'];
-        
         document.getElementById('keywordIndex').innerHTML = Object.entries(kws).map(([t, n]) => `
             <div class="idx-item flex justify-between text-xs font-bold" onclick="filterBoardByTag('${t}')">
                 <span>#${t}</span><span class="mono opacity-40">${n}</span>
             </div>
         `).join('');
-    }
-
-    // 看板與兩點連線
-    function toggleBoard(show) {
-        document.getElementById('boardLayer').classList.toggle('hidden', !show);
-        if(show) renderBoard(cards);
     }
 
     function renderBoard(data) {
@@ -164,67 +179,80 @@
                 </div>
                 <div class="text-sm font-bold flex-1 leading-relaxed">${marked.parse(c.content)}</div>
                 <div class="mt-4 flex justify-between items-center">
-                    <button onclick="startConnection('${c.id}')" class="text-[10px] font-black bg-black text-white px-2 py-1">建立連結</button>
+                    <div class="flex gap-2">
+                        <button onclick="loadToEdit('${c.fullId}')" class="text-[9px] font-black border border-black px-2">EDIT</button>
+                        <button onclick="startConnection('${c.id}')" class="text-[9px] font-black bg-black text-white px-2">LINK</button>
+                    </div>
                     <span class="mono text-[8px] opacity-30">${new Date(c.time).toLocaleTimeString()}</span>
                 </div>
             </div>
         `).join('');
     }
 
-    // 兩點連線核心邏輯
     function startConnection(id) {
         if (!connectSourceId) {
             connectSourceId = id;
             document.getElementById(`board-card-${id}`).classList.add('conn-active');
             document.getElementById('connTip').classList.remove('hidden');
         } else {
-            if (connectSourceId === id) {
-                resetConnection();
-                return;
-            }
-            // 執行雙向寫入
+            if (connectSourceId === id) { resetConnection(); return; }
             const cardA = cards.find(c => c.id === connectSourceId);
             const cardB = cards.find(c => c.id === id);
-            
-            if (!cardA.content.includes(`[[${cardB.id}]]`)) cardA.content += `\n\n[[${cardB.id}]]`;
-            if (!cardB.content.includes(`[[${cardA.id}]]`)) cardB.content += `\n\n[[${cardA.id}]]`;
-            
-            localStorage.setItem('zet_v8', JSON.stringify(cards));
-            alert(`已建立連結: #${cardA.id} ↔ #${cardB.id}`);
-            resetConnection();
-            renderBoard(cards);
-            uploadToDropbox();
+            cardA.content += `\n\n[[${cardB.id}]]`;
+            cardB.content += `\n\n[[${cardA.id}]]`;
+            localStorage.setItem('zet_v9', JSON.stringify(cards));
+            resetConnection(); renderBoard(cards); uploadToDropbox();
         }
     }
 
     function resetConnection() {
         if(connectSourceId) document.getElementById(`board-card-${connectSourceId}`).classList.remove('conn-active');
-        connectSourceId = null;
-        document.getElementById('connTip').classList.add('hidden');
+        connectSourceId = null; document.getElementById('connTip').classList.add('hidden');
     }
 
+    function toggleBoard(show) { document.getElementById('boardLayer').classList.toggle('hidden', !show); if(show) renderBoard(cards); }
     function filterBoardByMode(m) { toggleBoard(true); renderBoard(cards.filter(c => c.mode === m)); }
     function filterBoardByTag(t) { toggleBoard(true); renderBoard(cards.filter(c => c.tags.includes(t))); }
 
-    // Dropbox 備份系統
+    function exportMD() {
+        let md = "";
+        cards.forEach(c => md += `---
+id: ${c.id}
+tags: ${c.tags.join(',')}
+mode: ${c.mode || 'standard'}
+---
+${c.content}\n\n---\n\n`);
+        downloadFile(md, "ZettelSync_Export.md");
+    }
+
+    function exportCSV() {
+        let csv = "ID,Mode,Tags,Content\n";
+        cards.forEach(c => csv += `"${c.id}","${c.mode || ''}","${c.tags.join(' ')}","${c.content.replace(/"/g, '""')}"\n`);
+        downloadFile(csv, "ZettelSync_Export.csv");
+    }
+
+    function manualBackup() { downloadFile(JSON.stringify(cards), `ZettelBackup_${Date.now()}.json`); }
+
+    function downloadFile(content, name) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([content]));
+        a.download = name; a.click();
+    }
+
     function initDropbox() {
         const token = new URLSearchParams(window.location.hash.substring(1)).get('access_token');
         if (token) {
             dbx = new Dropbox.Dropbox({ accessToken: token });
             document.getElementById('syncIndicator').classList.add('bg-black');
-            window.location.hash = ""; 
+            window.location.hash = "";
         }
     }
     function authDropbox() {
-        const dbx_client_id = 'r8nisc7hr8cta77'; // 請確保這是你的 App Key
-        const url = `https://www.dropbox.com/oauth2/authorize?client_id=${dbx_client_id}&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`;
+        const url = `https://www.dropbox.com/oauth2/authorize?client_id=r8nisc7hr8cta77&response_type=token&redirect_uri=${encodeURIComponent(window.location.href.split('#')[0])}`;
         window.location.href = url;
     }
     function uploadToDropbox() {
-        if (!dbx) return;
-        dbx.filesUpload({ path: '/zet_backup.json', contents: JSON.stringify(cards), mode: 'overwrite' })
-            .then(() => console.log("Dropbox Synced"))
-            .catch(console.error);
+        if (dbx) dbx.filesUpload({ path: '/zet_backup.json', contents: JSON.stringify(cards), mode: 'overwrite' });
     }
 </script>
 </body>
